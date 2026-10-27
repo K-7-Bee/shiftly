@@ -344,6 +344,24 @@ table.data .right { text-align: right; }
   table.stack .row-actions { justify-content: flex-start; width: 100%; }
   table.stack .right { text-align: right; }
   .cell-wp { justify-content: flex-end; }
+  /* Time entries: compact card instead of one labelled line per field */
+  #entries-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "date pay" "wp person" "time hours" "status actions"; gap: 4px 12px; align-items: center; padding: 12px 16px; }
+  #entries-table td { display: block; padding: 0; text-align: left; min-width: 0; }
+  #entries-table td::before { display: none; }
+  #entries-table .c-date { grid-area: date; padding: 0; font-weight: 600; }
+  #entries-table .c-pay { grid-area: pay; text-align: right; font-weight: 600; }
+  #entries-table .c-wp { grid-area: wp; }
+  #entries-table .c-wp .cell-wp { justify-content: flex-start; }
+  #entries-table .c-person { grid-area: person; text-align: right; color: var(--ink-2); font-size: 13px; }
+  #entries-table .c-time { grid-area: time; font-size: 13px; color: var(--ink-2); }
+  #entries-table .c-time .cell-sub { display: inline; margin-left: 6px; }
+  #entries-table .c-hours { grid-area: hours; text-align: right; font-size: 13px; color: var(--ink-2); }
+  #entries-table .c-status { grid-area: status; }
+  #entries-table .actions-cell { grid-area: actions; padding: 0; }
+  #entries-table .row-actions { justify-content: flex-end; width: auto; }
+  /* Rows with Approve/Reject need the whole width for their buttons */
+  #entries-table tr:has([data-action="approve-entry"], [data-action="reject-entry"]) { grid-template-areas: "date pay" "wp person" "time hours" "status status" "actions actions"; }
+  #entries-table tr:has([data-action="approve-entry"], [data-action="reject-entry"]) .row-actions { justify-content: flex-start; padding-top: 4px; }
   table.stack td.primary .cell-wp { justify-content: flex-start; }
 }
 
@@ -429,6 +447,14 @@ table.data .right { text-align: right; }
 .hbar-track { height: 12px; border-radius: 6px; background: rgba(14, 42, 197, 0.08); overflow: hidden; }
 .hbar-track span { display: block; height: 100%; width: 0; border-radius: 6px; transition: width 1.3s var(--ease-out); }
 .print-only { display: none; }
+.settings-btn { position: relative; }
+.settings-block > div { display: grid; gap: 12px; }
+.sync-dot { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid #fff; background: transparent; }
+.sync-dot[data-state="synced"] { background: var(--ok); }
+.sync-dot[data-state="syncing"], .sync-dot[data-state="pending"] { background: #e0a21b; }
+.sync-dot[data-state="error"] { background: var(--bad); }
+.m-unit { display: none; }
+@media (max-width: 760px) { .m-unit { display: inline; } }
 
 /* =========================================================
    Footer
@@ -581,7 +607,8 @@ dialog.modal.closing::backdrop { animation: fadeOut 0.22s ease-in both; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         <span>Add <span class="label-long">time</span></span>
       </button>
-      <button class="icon-btn" type="button" data-action="open-settings" aria-label="Settings">
+      <button class="icon-btn settings-btn" type="button" data-action="open-settings" aria-label="Settings">
+        <span class="sync-dot" id="sync-dot" data-state="off" aria-hidden="true"></span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
       </button>
       <button class="icon-btn nav-toggle" type="button" data-action="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="main-nav">
@@ -1022,9 +1049,35 @@ dialog.modal.closing::backdrop { animation: fadeOut 0.22s ease-in both; }
       </div>
       <label class="field"><span>Monthly hours goal</span><input class="input" name="hoursGoal" type="number" min="1" max="744" step="1" inputmode="numeric"></label>
       <p class="field-error" data-error="hoursGoal" hidden></p>
+      <div class="settings-block" id="sync-block" aria-live="polite">
+        <h3>Sync between devices</h3>
+        <div data-sync-view="off" hidden>
+          <p class="hint">Cloud sync isn't set up yet. Add your Supabase project URL and anon key at the top of the sync section in index.html (see README).</p>
+        </div>
+        <div data-sync-view="signed-out" hidden>
+          <p class="hint">Sign in on every device with the same account and your data stays in sync.</p>
+          <div class="grid-2">
+            <label class="field"><span>Email</span><input class="input" id="sync-email" type="email" autocomplete="email" inputmode="email"></label>
+            <label class="field"><span>Password</span><input class="input" id="sync-password" type="password" autocomplete="current-password" minlength="6"></label>
+          </div>
+          <p class="field-error" id="sync-error" hidden></p>
+          <div class="toolbar">
+            <button class="btn btn-primary" type="button" data-action="sync-sign-in">Sign in</button>
+            <button class="btn" type="button" data-action="sync-sign-up">Create account</button>
+            <button class="btn btn-ghost" type="button" data-action="sync-magic-link">Email me a sign-in link</button>
+          </div>
+        </div>
+        <div data-sync-view="signed-in" hidden>
+          <p class="hint">Signed in as <b id="sync-who"></b>. <span id="sync-status-text"></span></p>
+          <div class="toolbar">
+            <button class="btn" type="button" data-action="sync-now">Sync now</button>
+            <button class="btn btn-ghost" type="button" data-action="sync-sign-out">Sign out</button>
+          </div>
+        </div>
+      </div>
       <div class="settings-block">
         <h3>Your data</h3>
-        <p class="hint">Everything is saved in this browser's localStorage. Demo data replaces your current records.</p>
+        <p class="hint">A copy is always kept in this browser, so the app also works offline. Demo data and “Clear all data” also apply to your other devices when sync is on.</p>
         <div class="toolbar">
           <button class="btn" type="button" data-action="load-demo">Load demo data</button>
           <button class="btn btn-danger" type="button" data-action="clear-data">Clear all data</button>
@@ -1247,15 +1300,22 @@ function cleanTimer(t) {
 /* ---------- state ---------- */
 const state = { workplaces: [], entries: [], people: [], payments: [], settings: cleanSettings({}), timer: null };
 
-function loadState() {
-  state.settings = cleanSettings(readKey(KEYS.settings, {}));
-  state.workplaces = cleanList(readKey(KEYS.workplaces, []), cleanWorkplace);
-  state.people = cleanList(readKey(KEYS.people, []), cleanPerson);
+/** Replace state from raw (untrusted) data — used for localStorage and for cloud copies. */
+function hydrate(src) {
+  state.settings = cleanSettings(src.settings);
+  state.workplaces = cleanList(src.workplaces, cleanWorkplace);
+  state.people = cleanList(src.people, cleanPerson);
   const wpIds = new Set(state.workplaces.map((w) => w.id));
   const pIds = new Set(state.people.map((p) => p.id));
-  state.entries = cleanList(readKey(KEYS.entries, []), cleanEntry).filter((e) => wpIds.has(e.workplaceId) && (e.worker === 'me' || pIds.has(e.worker)));
-  state.payments = cleanList(readKey(KEYS.payments, []), cleanPayment);
-  state.timer = cleanTimer(readKey(KEYS.timer, null));
+  state.entries = cleanList(src.entries, cleanEntry).filter((e) => wpIds.has(e.workplaceId) && (e.worker === 'me' || pIds.has(e.worker)));
+  state.payments = cleanList(src.payments, cleanPayment);
+  state.timer = cleanTimer(src.timer);
+}
+function loadState() {
+  hydrate({
+    settings: readKey(KEYS.settings, {}), workplaces: readKey(KEYS.workplaces, []), people: readKey(KEYS.people, []),
+    entries: readKey(KEYS.entries, []), payments: readKey(KEYS.payments, []), timer: readKey(KEYS.timer, null),
+  });
 }
 function save(...which) {
   const all = which.length === 0;
@@ -1265,6 +1325,7 @@ function save(...which) {
   if (all || which.includes('payments')) writeKey(KEYS.payments, state.payments);
   if (all || which.includes('settings')) writeKey(KEYS.settings, state.settings);
   if (all || which.includes('timer')) writeKey(KEYS.timer, state.timer);
+  markLocalChange();
 }
 
 const wpById = (id) => state.workplaces.find((w) => w.id === id);
@@ -1524,8 +1585,9 @@ function filteredEntries() {
   ).sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start) || b.createdAt - a.createdAt);
 }
 
-const ENTRY_PAGE = 40;
-let entryLimit = ENTRY_PAGE;
+// Phones show fewer entries per page so the stacked list stays short.
+const entryPage = () => (matchMedia('(max-width: 760px)').matches ? 10 : 40);
+let entryLimit = entryPage();
 function renderEntries() {
   const list = filteredEntries();
   const body = $('#entries-body'), empty = $('#entries-empty'), foot = $('#entries-foot');
@@ -1554,13 +1616,13 @@ function renderEntries() {
     const approve = !isMe && e.status !== 'approved' ? `<button class="btn btn-sm" type="button" data-action="approve-entry" data-id="${esc(e.id)}">Approve</button>` : '';
     const reject = !isMe && e.status !== 'rejected' ? `<button class="btn btn-sm btn-danger" type="button" data-action="reject-entry" data-id="${esc(e.id)}">Reject</button>` : '';
     return `<tr>
-      <td class="primary" data-label="Date"><span class="num">${esc(dateLabel(e.date))}</span></td>
-      <td data-label="Workplace"><span class="cell-wp"><i style="background:${esc(wp?.color || '#999')}" aria-hidden="true"></i><span>${esc(wp?.name || '—')}${e.taskName ? `<span class="cell-sub">${esc(e.taskName)}</span>` : ''}${e.note ? `<span class="cell-sub">“${esc(e.note)}”</span>` : ''}</span></span></td>
-      <td data-label="Person">${esc(workerName(e.worker))}</td>
-      <td data-label="Time" class="num">${timeTxt}</td>
-      <td data-label="Hours" class="right num">${esc(h.toFixed(2))}</td>
-      <td data-label="Pay" class="right num">${payTxt}</td>
-      <td data-label="Status">${statusHtml}</td>
+      <td class="primary c-date" data-label="Date"><span class="num">${esc(dateLabel(e.date))}</span></td>
+      <td class="c-wp" data-label="Workplace"><span class="cell-wp"><i style="background:${esc(wp?.color || '#999')}" aria-hidden="true"></i><span>${esc(wp?.name || '—')}${e.taskName ? `<span class="cell-sub">${esc(e.taskName)}</span>` : ''}${e.note ? `<span class="cell-sub">“${esc(e.note)}”</span>` : ''}</span></span></td>
+      <td class="c-person" data-label="Person">${esc(workerName(e.worker))}</td>
+      <td data-label="Time" class="num c-time">${timeTxt}</td>
+      <td data-label="Hours" class="right num c-hours">${esc(h.toFixed(2))}<span class="m-unit"> h</span></td>
+      <td data-label="Pay" class="right num c-pay">${payTxt}</td>
+      <td class="c-status" data-label="Status">${statusHtml}</td>
       <td class="actions-cell"><div class="row-actions">${approve}${reject}
         <button class="btn btn-sm" type="button" data-action="edit-entry" data-id="${esc(e.id)}">Edit</button>
         <button class="icon-btn sm" type="button" data-action="delete-entry" data-id="${esc(e.id)}" aria-label="Delete entry on ${esc(e.date)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
@@ -1571,7 +1633,7 @@ function renderEntries() {
   const payBag = bag();
   list.filter(countsTowardPay).forEach((e) => { const p = entryPay(e); if (!p.fixed) addTo(payBag, p.currency, p.amount); });
   foot.innerHTML = `<span>${list.length} entr${list.length === 1 ? 'y' : 'ies'} · ${esc(fmtHours(hours, 2))} counted · ${esc(fmtBag(payBag))} entry pay</span>` +
-    (list.length > shown.length ? `<button class="btn btn-sm" type="button" data-action="more-entries">Show ${Math.min(ENTRY_PAGE, list.length - shown.length)} more</button>` : '');
+    (list.length > shown.length ? `<button class="btn btn-sm" type="button" data-action="more-entries">Show ${Math.min(entryPage(), list.length - shown.length)} more</button>` : '');
 }
 
 function setRing(el, pct) {
@@ -1889,6 +1951,7 @@ function afterClose(dlg, value) {
   dlg._trigger = null;
   if (t && document.contains(t) && !t.closest('dialog:not([open])')) t.focus({ preventScroll: true });
   if (typeof dlg._onClose === 'function') { const fn = dlg._onClose; dlg._onClose = null; fn(value); }
+  setTimeout(applyPendingRemote, 0);
 }
 function finishClose(dlg, value) {
   clearTimeout(dlg._closeTimer);
@@ -2253,12 +2316,17 @@ payForm.addEventListener('submit', (e) => {
 
 /* ---------- Settings modal ---------- */
 const settingsForm = $('#form-settings');
-function openSettings(trigger) {
-  clearErrors(settingsForm);
+function fillSettingsForm() {
   const f = settingsForm.elements;
   f.userName.value = state.settings.userName;
   currencyOptions(f.currency, state.settings.currency);
   f.hoursGoal.value = state.settings.hoursGoal;
+}
+function openSettings(trigger) {
+  clearErrors(settingsForm);
+  fillSettingsForm();
+  syncError('');
+  renderSync();
   openModal($('#dlg-settings'), trigger);
 }
 settingsForm.addEventListener('submit', (e) => {
@@ -2407,7 +2475,7 @@ function loadDemo() {
   view.entryMonth = thisMonth(); view.entryWp = 'all'; view.entryPerson = 'all';
   view.salaryMonth = view.peopleMonth = view.reportMonth = thisMonth();
   view.reportWp = 'all'; view.reportPerson = 'me';
-  entryLimit = ENTRY_PAGE;
+  entryLimit = entryPage();
   renderAll();
 }
 function clearData() {
@@ -2415,7 +2483,7 @@ function clearData() {
   save();
   // Keep settings (goal, name, currency) but mark that the user chose an empty vault.
   writeKey(KEYS.settings, state.settings);
-  entryLimit = ENTRY_PAGE;
+  entryLimit = entryPage();
   renderAll();
 }
 
@@ -2446,7 +2514,7 @@ document.addEventListener('click', async (ev) => {
       toast(e.status === 'approved' ? `Approved ${workerName(e.worker)}'s entry` : `Rejected ${workerName(e.worker)}'s entry`, e.status === 'approved' ? 'ok' : 'info');
       break;
     }
-    case 'more-entries': entryLimit += ENTRY_PAGE; renderEntries(); break;
+    case 'more-entries': entryLimit += entryPage(); renderEntries(); break;
     case 'add-workplace': openWorkplaceModal(null, el); break;
     case 'edit-workplace': openWorkplaceModal(wpById(id), el); break;
     case 'delete-workplace': {
@@ -2499,14 +2567,14 @@ document.addEventListener('click', async (ev) => {
     case 'open-settings': closeNav(); openSettings(el); break;
     case 'load-demo': {
       const has = state.workplaces.length || state.entries.length || state.people.length;
-      if (!has || await confirmAsk({ title: 'Load demo data?', message: 'This replaces all your current workplaces, entries, people and payments with sample data.', ok: 'Load demo', danger: true })) {
+      if (!has || await confirmAsk({ title: 'Load demo data?', message: 'This replaces all your current workplaces, entries, people and payments with sample data — on all your synced devices if sync is on.', ok: 'Load demo', danger: true })) {
         closeModal($('#dlg-settings'));
         loadDemo(); toast('Demo data loaded');
       }
       break;
     }
     case 'clear-data': {
-      if (await confirmAsk({ title: 'Clear all data?', message: 'Every workplace, time entry, person and payment will be permanently removed from this browser.', ok: 'Clear everything', danger: true })) {
+      if (await confirmAsk({ title: 'Clear all data?', message: 'Every workplace, time entry, person and payment will be permanently removed — from all your synced devices if sync is on.', ok: 'Clear everything', danger: true })) {
         closeModal($('#dlg-settings'));
         clearData(); toast('All data cleared', 'info');
       }
@@ -2516,6 +2584,7 @@ document.addEventListener('click', async (ev) => {
     case 'print': renderReports(); window.print(); break;
     case 'close-modal': { const d = el.closest('dialog'); if (d) closeModal(d, 'cancel'); break; }
     case 'nav-toggle': toggleNav(); break;
+    case 'sync-sign-in': case 'sync-sign-up': case 'sync-magic-link': case 'sync-now': case 'sync-sign-out': syncAction(action); break;
   }
 });
 
@@ -2533,9 +2602,9 @@ document.addEventListener('change', (ev) => {
 });
 
 $$('[data-wp-filter]').forEach((b) => b.addEventListener('click', () => { view.wpFilter = b.dataset.wpFilter; renderWorkplaces(); }));
-$('#f-month').addEventListener('change', (e) => { view.entryMonth = e.target.value; entryLimit = ENTRY_PAGE; renderEntries(); });
-$('#f-wp').addEventListener('change', (e) => { view.entryWp = e.target.value; entryLimit = ENTRY_PAGE; renderEntries(); });
-$('#f-person').addEventListener('change', (e) => { view.entryPerson = e.target.value; entryLimit = ENTRY_PAGE; renderEntries(); });
+$('#f-month').addEventListener('change', (e) => { view.entryMonth = e.target.value; entryLimit = entryPage(); renderEntries(); });
+$('#f-wp').addEventListener('change', (e) => { view.entryWp = e.target.value; entryLimit = entryPage(); renderEntries(); });
+$('#f-person').addEventListener('change', (e) => { view.entryPerson = e.target.value; entryLimit = entryPage(); renderEntries(); });
 $('#r-wp').addEventListener('change', (e) => { view.reportWp = e.target.value; renderReports(); });
 $('#r-person').addEventListener('change', (e) => { view.reportPerson = e.target.value; renderReports(); });
 $('#show-archived').addEventListener('change', (e) => { view.showArchived = e.target.checked; renderPeople(); });
@@ -2590,7 +2659,7 @@ if (matchMedia('(hover: hover) and (pointer: fine)').matches && !prefersReducedM
 /* ---------- scroll: reveal, scene, background, active nav ---------- */
 const io = 'IntersectionObserver' in window ? new IntersectionObserver((items) => {
   items.forEach((it) => { if (it.isIntersecting) { it.target.classList.add('in'); io.unobserve(it.target); } });
-}, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 }) : null;
+}, { rootMargin: '0px 0px -6% 0px', threshold: 0 }) : null;
 function observeReveals() { $$('.reveal:not(.in)').forEach((el) => (io ? io.observe(el) : el.classList.add('in'))); }
 
 const sceneEls = $$('[data-scene]');
@@ -2625,6 +2694,7 @@ addEventListener('resize', onScroll, { passive: true });
 
 /* ---------- cross-tab sync ---------- */
 addEventListener('storage', (e) => {
+  if (e.key === SYNC_KEY) { loadSyncMeta(); return; }
   if (e.key && !Object.values(KEYS).includes(e.key)) return;
   if ($$('dialog[open]').length) return; // don't disturb an open form
   loadState(); renderAll();
@@ -2642,15 +2712,260 @@ setInterval(() => {
 }, 60000);
 
 /* =========================================================
+   Cloud sync (Supabase). The app stays local-first: every change is saved in this browser,
+   then pushed to one row per account. Other devices get it live via Realtime, and
+   re-check whenever the tab becomes visible or the device comes back online.
+   ========================================================= */
+// From Supabase → Project Settings → API. The anon key is meant to be public;
+// the row-level security in supabase/schema.sql keeps each account's data private.
+const SUPABASE_URL = '';
+const SUPABASE_ANON_KEY = '';
+const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
+const SYNC_TABLE = 'timevault_state';
+const SYNC_KEY = 'timevault_sync_meta';
+const syncConfigured = /^https:\/\/.+/.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 20;
+const sync = { client: null, user: null, channel: null, status: 'off', pushTimer: 0, retryTimer: 0, pending: null, busy: false, applying: false, reconciling: null, again: false };
+// deviceId: lets a device ignore its own echoes. modifiedAt: time of the last local change.
+// edited: false while this device only holds untouched demo data. dirty: changes not yet uploaded.
+let syncMeta = null;
+function loadSyncMeta() {
+  const m = readKey(SYNC_KEY, {});
+  syncMeta = {
+    deviceId: str(m.deviceId) || uid(), userId: str(m.userId), modifiedAt: num(m.modifiedAt), syncedAt: num(m.syncedAt),
+    edited: m.edited === true, dirty: m.dirty === true,
+  };
+  saveSyncMeta();
+}
+const saveSyncMeta = () => { if (syncMeta) writeKey(SYNC_KEY, syncMeta); };
+
+function markLocalChange() {
+  if (!syncMeta || sync.applying) return;
+  Object.assign(syncMeta, { modifiedAt: Date.now(), edited: true, dirty: true });
+  saveSyncMeta();
+  schedulePush();
+}
+function snapshot() {
+  const { workplaces, entries, people, payments, settings, timer } = state;
+  return { v: 1, workplaces, entries, people, payments, settings, timer, modifiedAt: syncMeta.modifiedAt, deviceId: syncMeta.deviceId };
+}
+function setSyncStatus(status) {
+  sync.status = status;
+  $('#sync-dot').dataset.state = status;
+  const label = {
+    off: syncConfigured ? 'Not signed in — saved on this device only' : 'Saved on this device',
+    syncing: 'Syncing…', synced: 'Synced across your devices', pending: 'Offline — will sync when back online',
+    error: 'Sync problem — retrying',
+  }[status];
+  $('#storage-meta').textContent = label;
+  $('#sync-dot').closest('button').setAttribute('aria-label', `Settings (${label})`);
+  renderSync();
+}
+function renderSync() {
+  const view = !syncConfigured ? 'off' : sync.user ? 'signed-in' : 'signed-out';
+  $$('[data-sync-view]').forEach((el) => { el.hidden = el.dataset.syncView !== view; });
+  if (sync.user) {
+    $('#sync-who').textContent = sync.user.email || 'your account';
+    const when = syncMeta?.syncedAt ? new Date(syncMeta.syncedAt).toLocaleString() : 'not yet';
+    $('#sync-status-text').textContent = { synced: `Last synced ${when}.`, syncing: 'Syncing…', pending: 'Waiting for a connection…', error: 'Last attempt failed — retrying.' }[sync.status] || '';
+  }
+}
+
+// Forms that edit records; a cloud update waits until they close. Settings/confirm are safe.
+const editingRecord = () => $$('dialog[open]').some((d) => !['dlg-settings', 'dlg-confirm'].includes(d.id));
+/** Apply a cloud copy. Waits while a record form is open so it can't pull data out from under an edit. */
+function applyRemote(data, { force = false } = {}) {
+  if (!force && editingRecord()) { sync.pending = data; return; }
+  sync.pending = null;
+  sync.applying = true;
+  try { hydrate(data); save(); } finally { sync.applying = false; }
+  Object.assign(syncMeta, { modifiedAt: num(data.modifiedAt), syncedAt: Date.now(), edited: true, dirty: false });
+  saveSyncMeta();
+  entryLimit = entryPage();
+  renderAll();
+  if ($('#dlg-settings').open) fillSettingsForm();
+}
+function applyPendingRemote() {
+  if (!sync.pending || editingRecord()) return;
+  const data = sync.pending;
+  sync.pending = null;
+  if (num(data.modifiedAt) <= syncMeta.modifiedAt) return; // a newer local change superseded it
+  applyRemote(data);
+  toast('Updated from your other device', 'info');
+}
+/** Union two copies by id (cloud wins on clashes) so signing in on a used device never loses data. */
+function mergeData(local, remote) {
+  const byId = (a, b, key = (x) => x.id) => { const m = new Map(); (a || []).forEach((x) => x && m.set(key(x), x)); (b || []).forEach((x) => x && m.set(key(x), x)); return [...m.values()]; };
+  const payKey = (p) => `${p.kind}|${p.refId}|${p.month}`;
+  return {
+    workplaces: byId(local.workplaces, remote.workplaces), people: byId(local.people, remote.people),
+    entries: byId(local.entries, remote.entries), payments: byId(local.payments, remote.payments, payKey),
+    settings: remote.settings || local.settings, timer: remote.timer || local.timer,
+  };
+}
+
+function schedulePush(delay = 800) {
+  if (!sync.user) return;
+  clearTimeout(sync.pushTimer);
+  sync.pushTimer = setTimeout(push, delay);
+  setSyncStatus('syncing');
+}
+async function push() {
+  if (!sync.user) return;
+  if (!navigator.onLine) { setSyncStatus('pending'); return; }
+  if (sync.busy) { schedulePush(400); return; }
+  sync.busy = true;
+  const data = snapshot();
+  try {
+    const { error } = await sync.client.from(SYNC_TABLE).upsert({ user_id: sync.user.id, data, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    if (syncMeta.modifiedAt === data.modifiedAt) syncMeta.dirty = false;
+    syncMeta.syncedAt = Date.now();
+    syncMeta.userId = sync.user.id;
+    saveSyncMeta();
+    setSyncStatus(syncMeta.dirty ? 'syncing' : 'synced');
+  } catch (err) {
+    console.warn('[TimeVault] sync push failed:', err);
+    setSyncStatus('error');
+    clearTimeout(sync.retryTimer);
+    sync.retryTimer = setTimeout(push, 10000);
+  } finally { sync.busy = false; }
+}
+async function pull() {
+  const { data, error } = await sync.client.from(SYNC_TABLE).select('data').eq('user_id', sync.user.id).maybeSingle();
+  if (error) throw error;
+  return data?.data && typeof data.data === 'object' ? data.data : null;
+}
+/** Bring this device and the cloud copy into agreement; newest change wins. Runs one at a time. */
+async function reconcile() {
+  if (sync.reconciling) { sync.again = true; return sync.reconciling; }
+  sync.reconciling = (async () => {
+    do { sync.again = false; await reconcileOnce(); } while (sync.again);
+  })().finally(() => { sync.reconciling = null; });
+  return sync.reconciling;
+}
+async function reconcileOnce() {
+  if (!sync.user) return;
+  if (!navigator.onLine) { setSyncStatus(syncMeta.dirty ? 'pending' : sync.status); return; }
+  setSyncStatus('syncing');
+  let remote;
+  try { remote = await pull(); }
+  catch (err) { console.warn('[TimeVault] sync pull failed:', err); setSyncStatus('error'); clearTimeout(sync.retryTimer); sync.retryTimer = setTimeout(reconcile, 10000); return; }
+  if (!remote) { await push(); return; } // first device on this account uploads its data
+  if (syncMeta.userId !== sync.user.id) {
+    // First sign-in on this device for this account.
+    syncMeta.userId = sync.user.id;
+    if (!syncMeta.edited) { applyRemote(remote, { force: true }); setSyncStatus('synced'); toast('Loaded your data from the cloud'); return; }
+    applyRemote(mergeData(snapshot(), remote), { force: true });
+    markLocalChange();
+    toast("Merged this device's data with your cloud data");
+    return;
+  }
+  const remoteAt = num(remote.modifiedAt);
+  if (remoteAt > syncMeta.modifiedAt) { applyRemote(remote); setSyncStatus(sync.pending ? 'syncing' : 'synced'); }
+  else if (syncMeta.dirty || remoteAt < syncMeta.modifiedAt) await push();
+  else { syncMeta.syncedAt = Date.now(); saveSyncMeta(); setSyncStatus('synced'); }
+}
+function subscribeRemote() {
+  if (sync.channel) sync.client.removeChannel(sync.channel);
+  sync.channel = sync.client.channel(`timevault-${sync.user.id}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: SYNC_TABLE, filter: `user_id=eq.${sync.user.id}` }, (payload) => {
+      const d = payload.new?.data;
+      if (!d || d.deviceId === syncMeta.deviceId || num(d.modifiedAt) <= syncMeta.modifiedAt) return;
+      applyRemote(d);
+      setSyncStatus('synced');
+      if (!sync.pending) toast('Updated from your other device', 'info');
+    })
+    .subscribe((status) => { if (status === 'SUBSCRIBED') reconcile(); });
+}
+async function setSyncUser(user) {
+  const changed = (user?.id || null) !== (sync.user?.id || null);
+  sync.user = user || null;
+  if (!changed) return;
+  if (sync.user) { subscribeRemote(); await reconcile(); }
+  else {
+    if (sync.channel) { sync.client.removeChannel(sync.channel); sync.channel = null; }
+    setSyncStatus('off');
+  }
+}
+async function initSync() {
+  loadSyncMeta();
+  setSyncStatus('off');
+  if (!syncConfigured) return;
+  try {
+    const { createClient } = await import(SUPABASE_JS);
+    sync.client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  } catch (err) {
+    console.warn('[TimeVault] sync unavailable:', err);
+    setSyncStatus('error');
+    return;
+  }
+  sync.client.auth.onAuthStateChange((_event, session) => { setTimeout(() => setSyncUser(session?.user), 0); });
+  const { data } = await sync.client.auth.getSession();
+  await setSyncUser(data.session?.user);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) reconcile(); });
+  addEventListener('online', reconcile);
+  addEventListener('offline', () => { if (sync.user) setSyncStatus('pending'); });
+}
+
+const syncRedirect = () => location.origin + location.pathname;
+function syncError(msg) { const el = $('#sync-error'); el.textContent = msg || ''; el.hidden = !msg; }
+function syncCredentials(needPassword = true) {
+  const email = $('#sync-email').value.trim(), password = $('#sync-password').value;
+  if (!/^\S+@\S+\.\S+$/.test(email)) { syncError('Enter a valid email address.'); $('#sync-email').focus(); return null; }
+  if (needPassword && password.length < 6) { syncError('Password must be at least 6 characters.'); $('#sync-password').focus(); return null; }
+  syncError('');
+  return { email, password };
+}
+async function syncAction(action) {
+  if (!sync.client) { toast('Sync is not available right now.', 'error'); return; }
+  try {
+    if (action === 'sync-sign-in') {
+      const c = syncCredentials(); if (!c) return;
+      const { error } = await sync.client.auth.signInWithPassword(c);
+      if (error) throw error;
+      toast('Signed in — syncing your data');
+    } else if (action === 'sync-sign-up') {
+      const c = syncCredentials(); if (!c) return;
+      const { data, error } = await sync.client.auth.signUp({ ...c, options: { emailRedirectTo: syncRedirect() } });
+      if (error) throw error;
+      if (!data.session) toast('Check your email to confirm your account, then sign in.', 'info');
+      else toast('Account created — syncing your data');
+    } else if (action === 'sync-magic-link') {
+      const c = syncCredentials(false); if (!c) return;
+      const { error } = await sync.client.auth.signInWithOtp({ email: c.email, options: { emailRedirectTo: syncRedirect() } });
+      if (error) throw error;
+      toast('Sign-in link sent — open it on this device.', 'info');
+    } else if (action === 'sync-now') {
+      await reconcile();
+      if (sync.status === 'synced') toast('Everything is in sync');
+    } else if (action === 'sync-sign-out') {
+      await push();
+      await sync.client.auth.signOut();
+      toast('Signed out — your data stays on this device', 'info');
+    }
+  } catch (err) {
+    syncError(err?.message || 'Something went wrong. Please try again.');
+  }
+}
+['#sync-email', '#sync-password'].forEach((sel) => $(sel).addEventListener('keydown', (e) => {
+  // These fields sit inside the settings form; Enter should sign in, not save settings.
+  if (e.key === 'Enter') { e.preventDefault(); syncAction('sync-sign-in'); }
+}));
+
+/* =========================================================
    Boot + loader
    ========================================================= */
 $('#year').textContent = new Date().getFullYear();
 const firstVisit = !hasAnyStoredData();
 loadState();
-if (firstVisit) loadDemo();
+if (firstVisit) {
+  loadDemo();
+  writeKey(SYNC_KEY, null); // demo data on a fresh device must not overwrite a cloud copy
+}
 renderAll();
 updateScene();
-try { localStorage.setItem('timevault__probe', '1'); localStorage.removeItem('timevault__probe'); $('#storage-meta').textContent = 'Saved in localStorage'; }
+initSync();
+try { localStorage.setItem('timevault__probe', '1'); localStorage.removeItem('timevault__probe'); }
 catch { $('#storage-meta').textContent = 'Storage unavailable — changes won\'t persist'; }
 
 (function runLoader() {
