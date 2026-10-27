@@ -1,0 +1,3037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ecefff">
+<meta name="description" content="TimeVault — a personal work-time and salary vault. Track workplace hours, calculate monthly salary and keep a clear record of what you and your team have earned.">
+<title>TimeVault — Every hour. Every payment. One place.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Raleway:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+/* =========================================================
+   Design tokens
+   ========================================================= */
+:root {
+  --royal: #0E2AC5;
+  --bright: #2F69FF;
+  --ink: #1a1a1a;
+  --ink-2: #4a4f63;
+  --ink-3: #7a8099;
+  --line: rgba(14, 42, 197, 0.12);
+  --line-strong: rgba(14, 42, 197, 0.22);
+  --glass: rgba(255, 255, 255, 0.58);
+  --glass-strong: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.75);
+  --shadow-sm: 0 2px 10px rgba(14, 42, 197, 0.06);
+  --shadow: 0 12px 34px rgba(14, 42, 197, 0.10), 0 2px 6px rgba(14, 42, 197, 0.05);
+  --shadow-lg: 0 24px 60px rgba(14, 42, 197, 0.18), 0 4px 12px rgba(14, 42, 197, 0.08);
+  --ok: #12996b;
+  --ok-bg: rgba(18, 153, 107, 0.12);
+  --warn: #b7791f;
+  --warn-bg: rgba(214, 158, 46, 0.16);
+  --bad: #d23c4d;
+  --bad-bg: rgba(210, 60, 77, 0.12);
+  --info-bg: rgba(47, 105, 255, 0.12);
+
+  --font-display: "Raleway", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 72px;
+  --r-sm: 10px; --r: 18px; --r-lg: 26px; --r-pill: 999px;
+  --gutter: clamp(16px, 4vw, 48px);
+  --maxw: 1200px;
+  --header-h: 68px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --tap: 44px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { background: #ecefff; scroll-behavior: smooth; scroll-padding-top: calc(var(--header-h) + 16px); -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; min-height: 100vh; color: var(--ink); font: 400 15px/1.55 var(--font-body);
+  background: transparent; overflow-x: clip; -webkit-font-smoothing: antialiased;
+}
+body.is-loading { overflow: hidden; }
+img, svg { max-width: 100%; }
+[hidden] { display: none !important; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--royal); }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* =========================================================
+   Background: gradient layers + WebGL canvas
+   ========================================================= */
+.bg-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0; transition: opacity 1.4s var(--ease-out); }
+.bg-layer.on { opacity: 1; }
+.bg-blue { background: radial-gradient(circle at center, #ffffff 0%, #ecefff 35%, #c2d1ff 100%); }
+.bg-lime { background: radial-gradient(circle at center, #ffffff 0%, #fbffe5 38%, #e8ff9c 100%); }
+.bg-pink { background: radial-gradient(circle at center, #ffffff 0%, #fff0f1 38%, #ffd1d5 100%); }
+#vault-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; display: block; opacity: 0; transition: opacity 1.2s var(--ease-out); }
+#vault-canvas.live { opacity: 1; }
+.no-webgl #vault-canvas { display: none; }
+
+.page { position: relative; z-index: 2; }
+
+/* =========================================================
+   Loader
+   ========================================================= */
+.loader {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  background: radial-gradient(circle at center, #ffffff 0%, #ecefff 45%, #c2d1ff 100%);
+  transition: opacity 0.9s var(--ease-out), visibility 0.9s;
+}
+.loader.done { opacity: 0; visibility: hidden; }
+.loader-inner { width: min(340px, 80vw); text-align: left; }
+.loader-brand { font: 900 13px/1 var(--font-display); letter-spacing: 0.32em; color: var(--royal); margin-bottom: 28px; }
+.loader-label { font: 500 12px/1 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); display: flex; justify-content: space-between; gap: 12px; }
+.loader-bar { margin-top: 14px; height: 2px; background: rgba(14, 42, 197, 0.12); border-radius: 2px; overflow: hidden; }
+.loader-bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--royal), var(--bright)); transition: width 0.12s linear; }
+.loader-pct { font-variant-numeric: tabular-nums; color: var(--royal); }
+
+/* =========================================================
+   Layout primitives
+   ========================================================= */
+.wrap { width: 100%; max-width: calc(var(--maxw) + var(--gutter) * 2); margin: 0 auto; padding-inline: var(--gutter); }
+.section { padding-block: clamp(64px, 10vw, 120px); }
+.section-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--sp-4) var(--sp-5); margin-bottom: var(--sp-6); }
+.section-head > div { min-width: 0; }
+.mono-label { font: 500 12px/1.3 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--royal); }
+.section-title { font: 800 clamp(34px, 6vw, 64px)/1.02 var(--font-display); letter-spacing: -0.02em; margin: 10px 0 10px; }
+.section-sub { color: var(--ink-2); max-width: 56ch; margin: 0; }
+.toolbar { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow);
+  border-radius: var(--r);
+}
+.card { padding: clamp(16px, 2.4vw, 24px); transition: transform 0.45s var(--ease-out), box-shadow 0.45s var(--ease-out), background-color 0.3s; }
+.card.lift:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+
+/* Reveal animation */
+.reveal { opacity: 0; transform: translateY(28px); filter: blur(10px); transition: opacity 1.5s var(--ease-out), transform 1.5s var(--ease-out), filter 1.5s var(--ease-out); }
+.reveal.in { opacity: 1; transform: none; filter: none; }
+.reveal[data-delay="1"] { transition-delay: 0.08s; }
+.reveal[data-delay="2"] { transition-delay: 0.16s; }
+.reveal[data-delay="3"] { transition-delay: 0.24s; }
+
+/* =========================================================
+   Buttons, inputs, badges
+   ========================================================= */
+.btn {
+  --bg: rgba(255, 255, 255, 0.75); --fg: var(--ink); --bd: var(--line-strong);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--tap); padding: 0 18px; border-radius: var(--r-pill);
+  border: 1px solid var(--bd); background: var(--bg); color: var(--fg);
+  font: 600 14px/1 var(--font-body); cursor: pointer; white-space: nowrap; text-decoration: none;
+  transition: transform 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out), background-color 0.2s, border-color 0.2s, color 0.2s;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); border-color: var(--bright); }
+.btn:active { transform: translateY(1px) scale(0.98); box-shadow: none; }
+.btn:focus-visible, .icon-btn:focus-visible, .chip:focus-visible, .tab:focus-visible, a:focus-visible, .swatch input:focus-visible + span, .switch input:focus-visible + span {
+  outline: 3px solid rgba(47, 105, 255, 0.55); outline-offset: 2px;
+}
+.btn svg { width: 18px; height: 18px; flex: none; }
+.btn-primary { --bg: var(--royal); --fg: #fff; --bd: transparent; box-shadow: 0 8px 22px rgba(14, 42, 197, 0.28); }
+.btn-primary:hover { --bg: #1a37d8; box-shadow: 0 12px 30px rgba(14, 42, 197, 0.36); border-color: transparent; }
+.btn-bright { --bg: var(--bright); --fg: #fff; --bd: transparent; }
+.btn-ghost { --bg: transparent; --bd: transparent; }
+.btn-ghost:hover { --bg: rgba(255, 255, 255, 0.7); }
+.btn-danger { --fg: var(--bad); }
+.btn-danger:hover { border-color: var(--bad); --bg: #fff5f6; }
+.btn-lg { min-height: 56px; padding: 0 28px; font-size: 16px; }
+.btn-sm { min-height: 36px; padding: 0 12px; font-size: 13px; }
+@media (pointer: coarse) { .btn-sm { min-height: var(--tap); } }
+.btn[disabled] { opacity: 0.5; pointer-events: none; }
+
+.icon-btn {
+  width: var(--tap); height: var(--tap); flex: none; display: inline-grid; place-items: center;
+  border-radius: 50%; border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.75);
+  cursor: pointer; color: var(--ink); transition: transform 0.25s var(--ease-out), border-color 0.2s, background-color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.icon-btn:hover { transform: rotate(18deg); border-color: var(--bright); }
+.icon-btn:active { transform: scale(0.94); }
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn.sm { width: 36px; height: 36px; }
+.icon-btn.sm:hover { transform: none; }
+@media (pointer: coarse) { .icon-btn.sm { width: var(--tap); height: var(--tap); } }
+
+.field { display: grid; gap: 6px; min-width: 0; }
+.field > span, .field-label { font: 500 11px/1.2 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
+.input, .select, .textarea {
+  width: 100%; min-height: var(--tap); padding: 10px 14px; border-radius: 12px;
+  border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.85);
+  transition: border-color 0.2s, box-shadow 0.2s; font-size: 15px;
+}
+.textarea { min-height: 80px; resize: vertical; }
+.select { appearance: none; -webkit-appearance: none; padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%230E2AC5' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; }
+.input:focus, .select:focus, .textarea:focus { outline: none; border-color: var(--bright); box-shadow: 0 0 0 4px rgba(47, 105, 255, 0.16); }
+.input[aria-invalid="true"], .select[aria-invalid="true"] { border-color: var(--bad); box-shadow: 0 0 0 4px rgba(210, 60, 77, 0.12); }
+.field-error { color: var(--bad); font-size: 13px; margin: 0; min-height: 0; }
+.select.compact, .input.compact { min-height: 40px; padding-block: 6px; font-size: 14px; width: auto; }
+@media (pointer: coarse) { .select.compact, .input.compact { min-height: var(--tap); } }
+
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--r-pill); font: 600 11px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; background: var(--info-bg); color: var(--royal); }
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.badge.plain::before { display: none; }
+.badge.ok { background: var(--ok-bg); color: var(--ok); }
+.badge.warn { background: var(--warn-bg); color: var(--warn); }
+.badge.bad { background: var(--bad-bg); color: var(--bad); }
+.badge.muted { background: rgba(26, 26, 26, 0.06); color: var(--ink-3); }
+
+.chips { display: inline-flex; padding: 4px; gap: 4px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.6); border: 1px solid var(--line); }
+.chip { min-height: 36px; padding: 0 14px; border-radius: var(--r-pill); border: 0; background: transparent; cursor: pointer; font: 600 13px/1 var(--font-body); color: var(--ink-2); transition: background-color 0.25s, color 0.25s; }
+.chip[aria-pressed="true"] { background: var(--royal); color: #fff; }
+@media (pointer: coarse) { .chip { min-height: 40px; } }
+
+.month-picker { display: inline-flex; align-items: center; gap: 4px; padding: 4px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.7); border: 1px solid var(--line); }
+.month-picker output { min-width: 150px; text-align: center; font: 600 14px/1 var(--font-mono); color: var(--ink); padding: 0 6px; }
+.month-picker .icon-btn { width: 36px; height: 36px; border: 0; background: transparent; }
+.month-picker .icon-btn:hover { transform: none; background: rgba(47, 105, 255, 0.1); }
+@media (pointer: coarse) { .month-picker .icon-btn { width: var(--tap); height: var(--tap); } }
+
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* =========================================================
+   Header
+   ========================================================= */
+.site-header { position: fixed; top: 0; left: 0; right: 0; z-index: 50; padding-top: env(safe-area-inset-top, 0px); transition: transform 1s var(--ease-out), opacity 1s var(--ease-out); }
+body:not(.ready) .site-header { transform: translateY(-110%); opacity: 0; }
+.header-bar { margin: 10px auto 0; width: calc(100% - 20px); max-width: calc(var(--maxw) + 40px); height: var(--header-h); display: flex; align-items: center; gap: var(--sp-4); padding: 0 12px 0 22px; border-radius: var(--r-pill); }
+.wordmark { font: 900 18px/1 var(--font-display); letter-spacing: 0.26em; color: var(--royal); text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 10px; }
+.wordmark i { width: 22px; height: 22px; border-radius: 50%; background: conic-gradient(from 210deg, var(--royal), var(--bright), #c2d1ff, var(--royal)); box-shadow: inset 0 0 0 4px rgba(255,255,255,0.65); flex: none; }
+.main-nav { display: flex; gap: 2px; margin: 0 auto; }
+.main-nav a { padding: 10px 12px; border-radius: var(--r-pill); font: 500 12px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; transition: background-color 0.2s, color 0.2s; }
+.main-nav a:hover, .main-nav a.active { background: rgba(14, 42, 197, 0.08); color: var(--royal); }
+.header-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.nav-toggle { display: none; }
+@media (max-width: 980px) {
+  .main-nav { position: absolute; top: calc(var(--header-h) + 18px + env(safe-area-inset-top, 0px)); left: 10px; right: 10px; flex-direction: column; padding: 10px; border-radius: var(--r); background: var(--glass-strong); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border: 1px solid var(--glass-border); box-shadow: var(--shadow-lg); opacity: 0; transform: translateY(-8px) scale(0.98); pointer-events: none; visibility: hidden; transition: opacity 0.35s var(--ease-out), transform 0.35s var(--ease-out), visibility 0.35s; }
+  .main-nav.open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; }
+  .main-nav a { padding: 14px 16px; font-size: 13px; min-height: var(--tap); }
+  .nav-toggle { display: inline-grid; }
+}
+@media (max-width: 520px) {
+  .header-bar { padding-left: 16px; gap: 8px; height: 60px; }
+  :root { --header-h: 60px; }
+  .wordmark { font-size: 15px; letter-spacing: 0.2em; }
+  .wordmark i { display: none; }
+  .add-time-btn .label-long { display: none; }
+  .add-time-btn { padding: 0 14px; }
+}
+
+/* =========================================================
+   Hero
+   ========================================================= */
+.hero { min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; justify-content: center; padding-top: calc(var(--header-h) + 56px); padding-bottom: 72px; position: relative; }
+.hero-anim { opacity: 0; transform: translateY(34px); filter: blur(12px); transition: opacity 1.5s var(--ease-out), transform 1.5s var(--ease-out), filter 1.5s var(--ease-out); }
+body.ready .hero-anim { opacity: 1; transform: none; filter: none; }
+body.ready .hero-anim:nth-child(2) { transition-delay: 0.1s; }
+body.ready .hero-anim:nth-child(3) { transition-delay: 0.2s; }
+body.ready .hero-anim:nth-child(4) { transition-delay: 0.3s; }
+body.ready .hero-anim:nth-child(5) { transition-delay: 0.4s; }
+.hero-title { font: 900 clamp(44px, 9vw, 116px)/0.96 var(--font-display); letter-spacing: -0.035em; margin: 18px 0 22px; max-width: 13ch; }
+.hero-title em { font-style: normal; background: linear-gradient(100deg, var(--royal), var(--bright) 70%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero-copy { font-size: clamp(16px, 1.8vw, 19px); color: var(--ink-2); max-width: 52ch; margin: 0 0 32px; }
+.hero-cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 42px; }
+.stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-4); }
+@media (max-width: 900px) { .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 380px) { .stat-grid { grid-template-columns: minmax(0, 1fr); } }
+.stat { padding: 18px 20px; position: relative; overflow: hidden; }
+.stat .mono-label { color: var(--ink-2); font-size: 11px; }
+.stat-value { font: 700 clamp(22px, 3vw, 32px)/1.1 var(--font-mono); letter-spacing: -0.02em; margin-top: 12px; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stat-foot { margin-top: 8px; font: 500 12px/1.3 var(--font-mono); color: var(--ink-3); }
+.stat::after { content: ""; position: absolute; right: -30px; top: -30px; width: 90px; height: 90px; border-radius: 50%; background: radial-gradient(circle, rgba(47, 105, 255, 0.18), transparent 70%); }
+.stat.accent { background: linear-gradient(135deg, rgba(14, 42, 197, 0.92), rgba(47, 105, 255, 0.88)); color: #fff; border-color: rgba(255,255,255,0.3); }
+.stat.accent .mono-label, .stat.accent .stat-foot { color: rgba(255, 255, 255, 0.78); }
+.stat.accent .stat-value { color: #fff; }
+.scroll-cue { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); display: grid; justify-items: center; gap: 6px; font: 500 11px/1 var(--font-mono); letter-spacing: 0.24em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; padding: 8px; }
+.scroll-cue svg { width: 18px; height: 18px; animation: cue 2.2s var(--ease-out) infinite; }
+@keyframes cue { 0% { transform: translateY(-4px); opacity: 0; } 40% { opacity: 1; } 100% { transform: translateY(10px); opacity: 0; } }
+@media (max-height: 760px), (max-width: 520px) { .scroll-cue { display: none; } }
+.data-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 18px; font: 500 12px/1.4 var(--font-mono); color: var(--ink-3); }
+.data-strip .btn { min-height: 34px; font-size: 12px; padding: 0 12px; }
+@media (pointer: coarse) { .data-strip .btn { min-height: var(--tap); } }
+
+/* =========================================================
+   Workplaces
+   ========================================================= */
+.wp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: var(--sp-4); }
+.wp-card { position: relative; display: flex; flex-direction: column; gap: 14px; transform-style: preserve-3d; will-change: transform; }
+.wp-card.tilting { transition: transform 0.12s linear, box-shadow 0.45s var(--ease-out); }
+.wp-card.inactive { opacity: 0.72; }
+.wp-top { display: flex; align-items: flex-start; gap: 12px; }
+.wp-dot { width: 42px; height: 42px; border-radius: 14px; flex: none; display: grid; place-items: center; color: #fff; font: 800 16px/1 var(--font-display); box-shadow: inset 0 -6px 12px rgba(0,0,0,0.12), 0 6px 16px rgba(14, 42, 197, 0.18); }
+.wp-name { font: 700 19px/1.2 var(--font-display); margin: 2px 0 6px; overflow-wrap: anywhere; }
+.wp-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.wp-stats { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.wp-stat { padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.6); border: 1px solid var(--line); min-width: 0; }
+.wp-stat b { display: block; font: 700 19px/1.2 var(--font-mono); margin-top: 6px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.wp-rate { font: 500 13px/1.3 var(--font-mono); color: var(--ink-2); }
+.wp-notes { color: var(--ink-2); font-size: 14px; margin: 0; overflow-wrap: anywhere; }
+.wp-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: auto; }
+.wp-actions .spacer { flex: 1; }
+
+/* Switch */
+.switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; min-height: var(--tap); font: 500 12px/1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch span { width: 42px; height: 24px; border-radius: 12px; background: rgba(26, 26, 26, 0.16); position: relative; transition: background-color 0.3s; flex: none; }
+.switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.2); transition: transform 0.35s var(--ease-out); }
+.switch input:checked + span { background: var(--ok); }
+.switch input:checked + span::after { transform: translateX(18px); }
+
+/* Empty states */
+.empty { grid-column: 1 / -1; display: grid; justify-items: center; text-align: center; gap: 10px; padding: 40px 20px; }
+.empty svg { width: 120px; height: 96px; }
+.empty h3 { font: 700 20px/1.2 var(--font-display); margin: 6px 0 0; }
+.empty p { margin: 0; color: var(--ink-2); max-width: 40ch; }
+
+/* =========================================================
+   Time entries
+   ========================================================= */
+.time-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-4); margin-bottom: var(--sp-4); align-items: stretch; }
+@media (max-width: 860px) { .time-tools { grid-template-columns: minmax(0, 1fr); } }
+.filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; padding: 16px; }
+.filters .field { flex: 1 1 160px; }
+.timer-card { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px; }
+.timer-card .field { flex: 1 1 170px; }
+.timer-face { font: 700 24px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--royal); min-width: 110px; }
+
+.table-card { padding: 0; overflow: hidden; }
+.table-wrap { overflow-x: auto; }
+table.data { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.data th { text-align: left; font: 500 11px/1.2 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); padding: 16px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; background: rgba(255, 255, 255, 0.4); }
+table.data td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+table.data tbody tr { transition: background-color 0.2s; }
+table.data tbody tr:hover { background: rgba(255, 255, 255, 0.55); }
+table.data tbody tr:last-child td { border-bottom: 0; }
+table.data .right { text-align: right; }
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.cell-wp { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cell-wp i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.cell-sub { display: block; font-size: 12px; color: var(--ink-3); overflow-wrap: anywhere; }
+.table-foot { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line); font: 500 12px/1.4 var(--font-mono); color: var(--ink-2); }
+
+@media (max-width: 760px) {
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  table.stack tbody tr:last-child { border-bottom: 0; }
+  table.stack td { border: 0; padding: 5px 0; display: flex; justify-content: space-between; gap: 14px; text-align: right; }
+  table.stack td::before { content: attr(data-label); font: 500 11px/1.6 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); text-align: left; flex: none; }
+  table.stack td.primary { font-weight: 600; padding-bottom: 8px; }
+  table.stack td.primary::before { display: none; }
+  table.stack td.actions-cell::before { display: none; }
+  table.stack td.actions-cell { padding-top: 10px; }
+  table.stack .row-actions { justify-content: flex-start; width: 100%; }
+  table.stack .right { text-align: right; }
+  .cell-wp { justify-content: flex-end; }
+  table.stack td.primary .cell-wp { justify-content: flex-start; }
+}
+
+/* =========================================================
+   Salary
+   ========================================================= */
+.salary-top { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-4); }
+@media (max-width: 900px) { .salary-top { grid-template-columns: minmax(0, 1fr); } }
+.ring-card { display: flex; align-items: center; gap: 18px; }
+.ring { position: relative; width: 112px; height: 112px; flex: none; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 10; }
+.ring .track { stroke: rgba(14, 42, 197, 0.1); }
+.ring .bar { stroke: url(#ringGrad); stroke-linecap: round; transition: stroke-dashoffset 1.6s var(--ease-out); }
+.ring .bar.lime { stroke: url(#ringGradLime); }
+.ring-label { position: absolute; inset: 0; display: grid; place-items: center; font: 700 20px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.ring-info { min-width: 0; }
+.ring-info h3 { font: 700 18px/1.2 var(--font-display); margin: 6px 0 4px; }
+.ring-info p { margin: 0; color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
+.goal-edit { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.goal-edit .input { width: 100px; min-height: 38px; }
+.salary-totals { display: grid; gap: 10px; align-content: center; }
+.salary-totals div { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--ink-2); }
+.salary-totals b { font: 700 15px/1.3 var(--font-mono); color: var(--ink); text-align: right; overflow-wrap: anywhere; }
+.progress { height: 6px; border-radius: 3px; background: rgba(14, 42, 197, 0.1); overflow: hidden; min-width: 80px; }
+.progress span { display: block; height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, var(--royal), var(--bright)); transition: width 1.4s var(--ease-out); }
+.progress.ok span { background: linear-gradient(90deg, #0f8a60, #33c48f); }
+.diff-neg { color: var(--bad); }
+.diff-pos { color: var(--ok); }
+
+/* =========================================================
+   People
+   ========================================================= */
+.people-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+@media (max-width: 980px) { .people-layout { grid-template-columns: minmax(0, 1fr); } }
+.people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: var(--sp-4); }
+.person-card { display: flex; flex-direction: column; gap: 12px; }
+.person-card.archived { opacity: 0.65; }
+.person-top { display: flex; gap: 12px; align-items: center; }
+.avatar { width: 46px; height: 46px; border-radius: 50%; flex: none; display: grid; place-items: center; font: 800 16px/1 var(--font-display); color: var(--royal); background: linear-gradient(135deg, #fff, #dfe6ff); border: 1px solid var(--line-strong); }
+.person-name { font: 700 18px/1.2 var(--font-display); margin: 0; overflow-wrap: anywhere; }
+.person-role { font-size: 13px; color: var(--ink-3); }
+.side-stack { display: grid; gap: var(--sp-4); }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; justify-content: space-between; padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.6); border: 1px solid var(--line); }
+.list li .who { min-width: 0; flex: 1 1 140px; }
+.list li .who b { display: block; overflow-wrap: anywhere; }
+.list li .who small { color: var(--ink-3); font-size: 12px; }
+.list .empty-li { justify-content: center; color: var(--ink-3); font-size: 14px; background: transparent; border-style: dashed; }
+.card-title { font: 700 20px/1.2 var(--font-display); margin: 6px 0 14px; }
+
+/* =========================================================
+   Reports
+   ========================================================= */
+.report-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; padding: 16px; margin-bottom: var(--sp-4); }
+.report-filters .field { flex: 1 1 180px; }
+.report-filters .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.report-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-4); }
+@media (max-width: 900px) { .report-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 380px) { .report-cards { grid-template-columns: minmax(0, 1fr); } }
+.charts { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: var(--sp-4); }
+@media (max-width: 900px) { .charts { grid-template-columns: minmax(0, 1fr); } }
+.chart-wrap { overflow-x: auto; }
+.bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 220px; padding-top: 18px; min-width: 520px; position: relative; }
+.bar-chart .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 6px; min-width: 0; position: relative; z-index: 1; }
+.bar-chart .bar-area { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; min-height: 0; }
+.chart-grid { position: absolute; left: 0; right: 0; top: 18px; bottom: 16px; pointer-events: none; }
+.bar-chart .bar { width: 100%; max-width: 22px; border-radius: 6px 6px 3px 3px; background: linear-gradient(180deg, var(--bright), var(--royal)); height: 0; transition: height 1.2s var(--ease-out); position: relative; min-height: 0; }
+.bar-chart .bar.zero { background: rgba(14, 42, 197, 0.1); height: 3px !important; }
+.bar-chart .col > span { font: 500 10px/1 var(--font-mono); color: var(--ink-3); }
+.bar-chart .col.weekend > span { color: var(--bright); }
+.bar-chart .col:hover .bar:not(.zero) { filter: brightness(1.15); }
+.bar-chart .tip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; font: 500 11px/1 var(--font-mono); padding: 6px 8px; border-radius: 6px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 2; }
+.bar-chart .bar:hover .tip { opacity: 1; }
+.chart-gridline { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); font: 500 10px/1 var(--font-mono); color: var(--ink-3); pointer-events: none; }
+.chart-gridline span { position: absolute; right: 0; top: -14px; }
+.hbars { display: grid; gap: 14px; }
+.hbar-row { display: grid; gap: 6px; }
+.hbar-head { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.hbar-head b { font: 600 14px/1.3 var(--font-mono); white-space: nowrap; }
+.hbar-head span { min-width: 0; overflow-wrap: anywhere; display: flex; align-items: center; gap: 8px; }
+.hbar-head i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.hbar-track { height: 12px; border-radius: 6px; background: rgba(14, 42, 197, 0.08); overflow: hidden; }
+.hbar-track span { display: block; height: 100%; width: 0; border-radius: 6px; transition: width 1.3s var(--ease-out); }
+.print-only { display: none; }
+
+/* =========================================================
+   Footer
+   ========================================================= */
+.site-footer { padding-block: 72px calc(48px + env(safe-area-inset-bottom, 0px)); }
+.footer-card { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--sp-5); padding: clamp(22px, 4vw, 40px); }
+@media (max-width: 760px) { .footer-card { grid-template-columns: minmax(0, 1fr); } }
+.footer-word { font: 900 clamp(36px, 8vw, 84px)/0.9 var(--font-display); letter-spacing: 0.08em; color: var(--royal); margin: 0 0 14px; }
+.footer-actions { display: flex; flex-wrap: wrap; gap: 10px; align-content: start; }
+.footer-meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding-top: 18px; border-top: 1px solid var(--line); font: 500 12px/1.4 var(--font-mono); color: var(--ink-3); }
+
+/* =========================================================
+   Timer pill, toasts
+   ========================================================= */
+.timer-pill { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 60; transform: translate(-50%, 140%); display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 18px; border-radius: var(--r-pill); background: rgba(26, 26, 26, 0.88); color: #fff; box-shadow: var(--shadow-lg); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: transform 0.6s var(--ease-out); max-width: calc(100vw - 32px); }
+.timer-pill.show { transform: translate(-50%, 0); }
+.timer-pill .pulse { width: 10px; height: 10px; border-radius: 50%; background: #ff4d5e; flex: none; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 94, 0.6); } 50% { box-shadow: 0 0 0 7px rgba(255, 77, 94, 0); } }
+.timer-pill .t { font: 700 16px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.timer-pill .w { font-size: 13px; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 30vw; }
+.timer-pill .btn { min-height: 40px; }
+.timer-pill .icon-btn { width: 40px; height: 40px; background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); color: #fff; }
+@media (pointer: coarse) { .timer-pill .btn, .timer-pill .icon-btn { min-height: var(--tap); height: var(--tap); } .timer-pill .icon-btn { width: var(--tap); } }
+
+.toasts { position: fixed; z-index: 300; top: calc(var(--header-h) + 22px + env(safe-area-inset-top, 0px)); right: 16px; display: grid; gap: 10px; width: min(360px, calc(100vw - 32px)); pointer-events: none; }
+.toast { pointer-events: auto; display: flex; gap: 12px; align-items: center; padding: 14px 16px; border-radius: 16px; background: var(--glass-strong); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); border: 1px solid var(--glass-border); box-shadow: var(--shadow-lg); font-weight: 500; animation: toastIn 0.6s var(--ease-out) both; }
+.toast.out { animation: toastOut 0.4s var(--ease-out) both; }
+.toast i { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--ok-bg); color: var(--ok); font-style: normal; font-weight: 700; }
+.toast.error i { background: var(--bad-bg); color: var(--bad); }
+.toast.info i { background: var(--info-bg); color: var(--royal); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(-12px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes toastOut { to { opacity: 0; transform: translateX(30px); } }
+
+/* =========================================================
+   Dialogs
+   ========================================================= */
+dialog.modal { border: 0; padding: 0; background: transparent; color: var(--ink); width: min(560px, calc(100vw - 24px)); max-width: none; max-height: calc(100dvh - 24px); overflow: visible; }
+dialog.modal::backdrop { background: rgba(14, 20, 60, 0.28); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+dialog.modal[open] { animation: modalIn 0.5s var(--ease-out) both; }
+dialog.modal[open]::backdrop { animation: fadeIn 0.4s ease both; }
+dialog.modal.closing { animation: modalOut 0.22s ease-in both; }
+dialog.modal.closing::backdrop { animation: fadeOut 0.22s ease-in both; }
+@keyframes modalIn { from { opacity: 0; transform: translateY(24px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes modalOut { to { opacity: 0; transform: translateY(14px) scale(0.98); } }
+@keyframes fadeIn { from { opacity: 0; } }
+@keyframes fadeOut { to { opacity: 0; } }
+.modal-card { background: rgba(255, 255, 255, 0.92); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); border: 1px solid var(--glass-border); border-radius: var(--r-lg); box-shadow: var(--shadow-lg); max-height: calc(100dvh - 24px); display: flex; flex-direction: column; overflow: hidden; }
+.modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 22px 22px 0; }
+.modal-head h2 { font: 800 26px/1.1 var(--font-display); margin: 6px 0 0; }
+.modal-body { padding: 18px 22px; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 14px; -webkit-overflow-scrolling: touch; }
+.modal-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding: 14px 22px 22px; border-top: 1px solid var(--line); }
+.modal-foot .left { margin-right: auto; }
+.grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 520px) {
+  .grid-3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .grid-3 > :last-child { grid-column: 1 / -1; }
+  dialog.modal { width: 100vw; margin: auto 0 0; max-height: 94dvh; }
+  .modal-card { border-radius: var(--r-lg) var(--r-lg) 0 0; max-height: 94dvh; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  @keyframes modalIn { from { opacity: 0.4; transform: translateY(60%); } to { opacity: 1; transform: none; } }
+  @keyframes modalOut { to { opacity: 0; transform: translateY(40%); } }
+}
+@media (max-width: 360px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
+.calc-preview { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 14px 16px; border-radius: 14px; background: linear-gradient(135deg, rgba(14, 42, 197, 0.07), rgba(47, 105, 255, 0.05)); border: 1px solid var(--line); }
+.calc-preview div { display: grid; gap: 4px; }
+.calc-preview b { font: 700 18px/1.2 var(--font-mono); color: var(--royal); }
+.calc-preview small { color: var(--ink-2); font-size: 13px; grid-column: 1 / -1; }
+.warn-box { padding: 12px 14px; border-radius: 12px; background: var(--warn-bg); color: #7a4f0c; font-size: 14px; border: 1px solid rgba(214, 158, 46, 0.35); }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch { position: relative; }
+.swatch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.swatch span { display: block; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; border: 3px solid #fff; box-shadow: 0 0 0 1px var(--line-strong); transition: transform 0.2s var(--ease-out); }
+.swatch input:checked + span { box-shadow: 0 0 0 2px var(--royal); transform: scale(1.1); }
+@media (pointer: coarse) { .swatch span { width: 40px; height: 40px; } }
+.hint { font-size: 13px; color: var(--ink-3); margin: 0; }
+.settings-block { display: grid; gap: 12px; padding: 16px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255,255,255,0.6); }
+.settings-block h3 { margin: 0; font: 700 16px/1.2 var(--font-display); }
+
+/* =========================================================
+   Reduced motion
+   ========================================================= */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; transition-delay: 0s !important; }
+  .reveal, .hero-anim { opacity: 1; transform: none; filter: none; }
+}
+
+/* =========================================================
+   Print
+   ========================================================= */
+@media print {
+  @page { margin: 14mm; }
+  html, body { background: #fff !important; }
+  .bg-layer, #vault-canvas, .loader, .site-header, .timer-pill, .toasts, dialog, .scroll-cue, .hero, #workplaces, #time, #people, .site-footer, .no-print, .row-actions, .actions-cell, .month-picker .icon-btn, .goal-edit { display: none !important; }
+  .print-only { display: block; }
+  .section { padding: 0 0 18px; }
+  .reveal { opacity: 1 !important; transform: none !important; filter: none !important; }
+  .glass { background: #fff !important; box-shadow: none !important; border: 1px solid #ccd3ee !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .section-title { font-size: 28px; }
+  .stat.accent { background: #fff !important; color: var(--ink) !important; }
+  .stat.accent .stat-value, .stat.accent .mono-label, .stat.accent .stat-foot { color: var(--ink) !important; }
+  .bar-chart { min-width: 0; height: 160px; }
+  .charts, .report-cards, .salary-top { break-inside: avoid; }
+  table.data th { background: #f3f5ff !important; }
+  .bar-chart .bar, .hbar-track span, .progress span { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #salary { break-after: page; }
+  .report-filters .actions { display: none !important; }
+}
+</style>
+</head>
+<body class="is-loading">
+
+<!-- Morphing gradient background -->
+<div class="bg-layer bg-blue on" data-bg="blue" aria-hidden="true"></div>
+<div class="bg-layer bg-lime" data-bg="lime" aria-hidden="true"></div>
+<div class="bg-layer bg-pink" data-bg="pink" aria-hidden="true"></div>
+<canvas id="vault-canvas" aria-hidden="true"></canvas>
+
+<!-- Loader -->
+<div class="loader" id="loader" role="status" aria-live="polite">
+  <div class="loader-inner">
+    <div class="loader-brand">TIMEVAULT</div>
+    <div class="loader-label"><span>Calibrating time vault</span><span class="loader-pct" id="loader-pct">000%</span></div>
+    <div class="loader-bar"><span id="loader-bar"></span></div>
+  </div>
+</div>
+
+<!-- SVG gradient defs shared by rings -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0E2AC5"/><stop offset="1" stop-color="#2F69FF"/></linearGradient>
+    <linearGradient id="ringGradLime" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5a8f00"/><stop offset="1" stop-color="#a8d82c"/></linearGradient>
+  </defs>
+</svg>
+
+<div class="page">
+<header class="site-header">
+  <div class="header-bar glass">
+    <a class="wordmark" href="#top" aria-label="TimeVault home"><i aria-hidden="true"></i>TIMEVAULT</a>
+    <nav class="main-nav" id="main-nav" aria-label="Sections">
+      <a href="#top" data-nav="top">Overview</a>
+      <a href="#workplaces" data-nav="workplaces">Workplaces</a>
+      <a href="#time" data-nav="time">Time</a>
+      <a href="#salary" data-nav="salary">Salary</a>
+      <a href="#people" data-nav="people">People</a>
+      <a href="#reports" data-nav="reports">Reports</a>
+    </nav>
+    <div class="header-actions">
+      <button class="btn btn-primary add-time-btn" type="button" data-action="add-entry">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        <span>Add <span class="label-long">time</span></span>
+      </button>
+      <button class="icon-btn" type="button" data-action="open-settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+      <button class="icon-btn nav-toggle" type="button" data-action="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="main-nav">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <!-- ============ HERO ============ -->
+  <section class="hero wrap" id="top" data-scene="0" data-bg="blue" aria-labelledby="hero-title">
+    <div class="mono-label hero-anim">[ Personal work &amp; salary vault ]</div>
+    <h1 class="hero-title hero-anim" id="hero-title">Every hour. Every payment. <em>One place.</em></h1>
+    <p class="hero-copy hero-anim">Track workplace hours, calculate monthly salary, and keep a clear record of what you and your team have earned.</p>
+    <div class="hero-cta hero-anim">
+      <button class="btn btn-primary btn-lg" type="button" data-action="add-entry">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>
+        Log work time
+      </button>
+      <button class="btn btn-lg" type="button" data-action="toggle-timer" data-timer-btn>Start timer</button>
+    </div>
+    <div class="hero-anim">
+      <div class="stat-grid" aria-live="polite">
+        <article class="glass stat lift card">
+          <div class="mono-label">This month hours</div>
+          <div class="stat-value" id="stat-hours">0.0 h</div>
+          <div class="stat-foot" id="stat-hours-foot">—</div>
+        </article>
+        <article class="glass stat lift card">
+          <div class="mono-label">This month expected pay</div>
+          <div class="stat-value" id="stat-expected">—</div>
+          <div class="stat-foot" id="stat-expected-foot">—</div>
+        </article>
+        <article class="glass stat lift card">
+          <div class="mono-label">Paid this month</div>
+          <div class="stat-value" id="stat-paid">—</div>
+          <div class="stat-foot" id="stat-paid-foot">—</div>
+        </article>
+        <article class="glass stat accent lift card">
+          <div class="mono-label">Unpaid balance</div>
+          <div class="stat-value" id="stat-unpaid">—</div>
+          <div class="stat-foot" id="stat-unpaid-foot">Across all months</div>
+        </article>
+      </div>
+      <div class="data-strip">
+        <span>Data lives only in this browser.</span>
+        <button class="btn btn-sm" type="button" data-action="load-demo">Load demo data</button>
+        <button class="btn btn-sm btn-danger" type="button" data-action="clear-data">Clear all data</button>
+      </div>
+    </div>
+    <a class="scroll-cue" href="#workplaces" aria-label="Scroll to workplaces">
+      Scroll
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 4v16M6 14l6 6 6-6"/></svg>
+    </a>
+  </section>
+
+  <!-- ============ WORKPLACES ============ -->
+  <section class="section wrap" id="workplaces" data-scene="0" data-bg="blue" aria-labelledby="wp-title">
+    <div class="section-head reveal">
+      <div>
+        <div class="mono-label">[ 01 — Workplaces ]</div>
+        <h2 class="section-title" id="wp-title">Workplaces</h2>
+        <p class="section-sub">Every place that pays you, with its own pay type, rate and currency. Cards show this month at a glance.</p>
+      </div>
+      <div class="toolbar">
+        <div class="chips" role="group" aria-label="Filter workplaces">
+          <button class="chip" type="button" data-wp-filter="all" aria-pressed="true">All</button>
+          <button class="chip" type="button" data-wp-filter="active" aria-pressed="false">Active</button>
+          <button class="chip" type="button" data-wp-filter="inactive" aria-pressed="false">Inactive</button>
+        </div>
+        <button class="btn btn-primary" type="button" data-action="add-workplace">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Add workplace
+        </button>
+      </div>
+    </div>
+    <div class="wp-grid reveal" data-delay="1" id="wp-grid"></div>
+  </section>
+
+  <!-- ============ TIME ENTRIES ============ -->
+  <section class="section wrap" id="time" data-scene="1" data-bg="lime" aria-labelledby="time-title">
+    <div class="section-head reveal">
+      <div>
+        <div class="mono-label">[ 02 — Time entries ]</div>
+        <h2 class="section-title" id="time-title">Time entries</h2>
+        <p class="section-sub">Log shifts, breaks and tasks. Hours and pay are calculated for you from each workplace's pay type.</p>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-primary" type="button" data-action="add-entry">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Add entry
+        </button>
+      </div>
+    </div>
+
+    <div class="time-tools reveal" data-delay="1">
+      <form class="glass filters" id="entry-filters" aria-label="Filter time entries" onsubmit="return false">
+        <label class="field"><span>Month</span><select class="select" id="f-month"></select></label>
+        <label class="field"><span>Workplace</span><select class="select" id="f-wp"></select></label>
+        <label class="field"><span>Person</span><select class="select" id="f-person"></select></label>
+      </form>
+      <div class="glass timer-card" aria-label="Live timer">
+        <label class="field"><span>Timer workplace</span><select class="select" id="timer-wp"></select></label>
+        <div class="timer-face" id="timer-face" aria-live="off">00:00:00</div>
+        <button class="btn btn-bright" type="button" data-action="toggle-timer" data-timer-btn>Start timer</button>
+      </div>
+    </div>
+
+    <div class="glass table-card reveal" data-delay="2">
+      <div class="table-wrap">
+        <table class="data stack" id="entries-table">
+          <caption class="visually-hidden">Time entries</caption>
+          <thead>
+            <tr><th scope="col">Date</th><th scope="col">Workplace</th><th scope="col">Person</th><th scope="col">Time</th><th scope="col" class="right">Hours</th><th scope="col" class="right">Pay</th><th scope="col">Status</th><th scope="col" class="right"><span class="visually-hidden">Actions</span></th></tr>
+          </thead>
+          <tbody id="entries-body"></tbody>
+        </table>
+      </div>
+      <div id="entries-empty" hidden></div>
+      <div class="table-foot" id="entries-foot"></div>
+    </div>
+  </section>
+
+  <!-- ============ SALARY ============ -->
+  <section class="section wrap" id="salary" data-scene="2" data-bg="pink" aria-labelledby="salary-title">
+    <div class="print-only"><h1 style="font-family:var(--font-display);margin:0 0 4px">TimeVault report</h1><p id="print-meta" style="margin:0 0 16px;color:#555"></p></div>
+    <div class="section-head reveal">
+      <div>
+        <div class="mono-label">[ 03 — Monthly salary ]</div>
+        <h2 class="section-title" id="salary-title">Monthly salary</h2>
+        <p class="section-sub">Expected vs received, per workplace. Record payments and keep an eye on what is still owed to you.</p>
+      </div>
+      <div class="toolbar">
+        <div class="month-picker" data-month-picker="salary">
+          <button class="icon-btn" type="button" data-month-step="-1" aria-label="Previous month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <output aria-live="polite"></output>
+          <button class="icon-btn" type="button" data-month-step="1" aria-label="Next month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="salary-top reveal" data-delay="1">
+      <article class="glass card ring-card">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52"/><circle class="bar" id="ring-received" cx="60" cy="60" r="52"/></svg>
+          <div class="ring-label" id="ring-received-label">0%</div>
+        </div>
+        <div class="ring-info">
+          <div class="mono-label">Salary received</div>
+          <h3 id="ring-received-title">0% of expected</h3>
+          <p id="ring-received-sub">—</p>
+        </div>
+      </article>
+      <article class="glass card ring-card">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52"/><circle class="bar lime" id="ring-hours" cx="60" cy="60" r="52"/></svg>
+          <div class="ring-label" id="ring-hours-label">0%</div>
+        </div>
+        <div class="ring-info">
+          <div class="mono-label">Hours goal</div>
+          <h3 id="ring-hours-title">0 of 0 h</h3>
+          <form class="goal-edit" id="goal-form">
+            <label class="visually-hidden" for="goal-input">Monthly hours goal</label>
+            <input class="input" id="goal-input" type="number" min="1" max="744" step="1" inputmode="numeric">
+            <button class="btn btn-sm" type="submit">Set goal</button>
+          </form>
+        </div>
+      </article>
+      <article class="glass card salary-totals" id="salary-totals"></article>
+    </div>
+
+    <div class="glass table-card reveal" data-delay="2">
+      <div class="table-wrap">
+        <table class="data stack">
+          <caption class="visually-hidden">Monthly salary by workplace</caption>
+          <thead>
+            <tr><th scope="col">Workplace</th><th scope="col" class="right">Hours</th><th scope="col" class="right">Entries</th><th scope="col" class="right">Expected</th><th scope="col" class="right">Received</th><th scope="col" class="right">Difference</th><th scope="col">Status</th><th scope="col" class="right"><span class="visually-hidden">Actions</span></th></tr>
+          </thead>
+          <tbody id="salary-body"></tbody>
+        </table>
+      </div>
+      <div id="salary-empty" hidden></div>
+    </div>
+  </section>
+
+  <!-- ============ PEOPLE ============ -->
+  <section class="section wrap" id="people" data-scene="2" data-bg="pink" aria-labelledby="people-title">
+    <div class="section-head reveal">
+      <div>
+        <div class="mono-label">[ 04 — People I manage ]</div>
+        <h2 class="section-title" id="people-title">People</h2>
+        <p class="section-sub">Helpers who sometimes work for you. Approve their time, see what you owe and record payments.</p>
+      </div>
+      <div class="toolbar">
+        <div class="month-picker" data-month-picker="people">
+          <button class="icon-btn" type="button" data-month-step="-1" aria-label="Previous month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <output aria-live="polite"></output>
+          <button class="icon-btn" type="button" data-month-step="1" aria-label="Next month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        </div>
+        <label class="switch"><input type="checkbox" id="show-archived"><span></span>Archived</label>
+        <button class="btn btn-primary" type="button" data-action="add-person">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Add person
+        </button>
+      </div>
+    </div>
+    <div class="people-layout">
+      <div class="people-grid reveal" data-delay="1" id="people-grid"></div>
+      <div class="side-stack reveal" data-delay="2">
+        <article class="glass card">
+          <div class="mono-label">Approval queue</div>
+          <h3 class="card-title">Pending entries</h3>
+          <ul class="list" id="pending-list"></ul>
+        </article>
+        <article class="glass card">
+          <div class="mono-label">Owed this month</div>
+          <h3 class="card-title">Unpaid balances</h3>
+          <ul class="list" id="unpaid-list"></ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ REPORTS ============ -->
+  <section class="section wrap" id="reports" data-scene="3" data-bg="pink" aria-labelledby="reports-title">
+    <div class="section-head reveal">
+      <div>
+        <div class="mono-label">[ 05 — Reports &amp; exports ]</div>
+        <h2 class="section-title" id="reports-title">Reports</h2>
+        <p class="section-sub">Slice any month by workplace and person, then export a CSV or a clean printable summary.</p>
+      </div>
+    </div>
+    <form class="glass report-filters reveal" data-delay="1" id="report-form" onsubmit="return false" aria-label="Report filters">
+      <div class="field"><span class="field-label">Month</span>
+        <div class="month-picker" data-month-picker="reports">
+          <button class="icon-btn" type="button" data-month-step="-1" aria-label="Previous month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <output aria-live="polite"></output>
+          <button class="icon-btn" type="button" data-month-step="1" aria-label="Next month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        </div>
+      </div>
+      <label class="field"><span>Workplace</span><select class="select" id="r-wp"></select></label>
+      <label class="field"><span>Person</span><select class="select" id="r-person"></select></label>
+      <div class="actions">
+        <button class="btn" type="button" data-action="download-csv">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+          Download CSV
+        </button>
+        <button class="btn btn-primary" type="button" data-action="print">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M6 14h12v7H6z"/></svg>
+          Print / Save PDF
+        </button>
+      </div>
+    </form>
+    <div class="report-cards reveal" data-delay="1">
+      <article class="glass stat card"><div class="mono-label">Total hours</div><div class="stat-value" id="r-hours">0.0 h</div><div class="stat-foot" id="r-hours-foot">—</div></article>
+      <article class="glass stat card"><div class="mono-label">Total expected pay</div><div class="stat-value" id="r-expected">—</div><div class="stat-foot">Approved work only</div></article>
+      <article class="glass stat card"><div class="mono-label">Total received pay</div><div class="stat-value" id="r-received">—</div><div class="stat-foot">Recorded payments</div></article>
+      <article class="glass stat accent card"><div class="mono-label">Unpaid balance</div><div class="stat-value" id="r-unpaid">—</div><div class="stat-foot">Expected minus received</div></article>
+    </div>
+    <div class="charts reveal" data-delay="2">
+      <article class="glass card">
+        <div class="mono-label">Daily worked hours</div>
+        <h3 class="card-title" id="chart-days-title">This month</h3>
+        <div class="chart-wrap"><div class="bar-chart" id="chart-days" role="img" aria-label="Bar chart of daily worked hours"></div></div>
+      </article>
+      <article class="glass card">
+        <div class="mono-label">Pay by workplace</div>
+        <h3 class="card-title">Where the money comes from</h3>
+        <div class="hbars" id="chart-wp"></div>
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer wrap" data-scene="3" data-bg="pink" id="footer">
+  <div class="glass footer-card reveal">
+    <div>
+      <p class="footer-word">TIMEVAULT</p>
+      <p class="section-sub">A private vault for your hours and pay. Everything is stored locally in this browser — nothing leaves your device.</p>
+    </div>
+    <div class="footer-actions">
+      <button class="btn btn-primary" type="button" data-action="add-entry">Log work time</button>
+      <button class="btn" type="button" data-action="load-demo">Load demo data</button>
+      <button class="btn btn-danger" type="button" data-action="clear-data">Clear all data</button>
+      <a class="btn btn-ghost" href="#top">Back to top ↑</a>
+    </div>
+    <div class="footer-meta"><span>© <span id="year"></span> TimeVault · Personal edition</span><span id="storage-meta">localStorage</span></div>
+  </div>
+</footer>
+</div>
+
+<!-- Timer pill -->
+<div class="timer-pill" id="timer-pill" role="status" aria-live="off" aria-hidden="true">
+  <span class="pulse" aria-hidden="true"></span>
+  <span class="t" id="timer-pill-time">00:00:00</span>
+  <span class="w" id="timer-pill-wp"></span>
+  <button class="btn btn-bright" type="button" data-action="toggle-timer" tabindex="-1">Stop</button>
+  <button class="icon-btn" type="button" data-action="discard-timer" aria-label="Discard timer" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<!-- ============ DIALOGS ============ -->
+<dialog class="modal" id="dlg-workplace" aria-labelledby="dlg-wp-title">
+  <form class="modal-card" id="form-workplace" novalidate>
+    <div class="modal-head">
+      <div><div class="mono-label">Workplace</div><h2 id="dlg-wp-title">Add workplace</h2></div>
+      <button class="icon-btn sm" type="button" data-action="close-modal" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" name="id">
+      <label class="field"><span>Workplace name *</span><input class="input" name="name" maxlength="80" autocomplete="organization" required></label>
+      <p class="field-error" data-error="name" hidden></p>
+      <div class="grid-3">
+        <label class="field"><span>Pay type</span>
+          <select class="select" name="payType">
+            <option value="hourly">Hourly</option><option value="daily">Daily</option><option value="monthly">Monthly salary</option><option value="task">Per task</option>
+          </select></label>
+        <label class="field"><span data-rate-label>Rate / hour</span><input class="input" name="rate" type="number" min="0" step="0.01" inputmode="decimal" required></label>
+        <label class="field"><span>Currency</span><select class="select" name="currency" data-currency-select></select></label>
+      </div>
+      <p class="field-error" data-error="rate" hidden></p>
+      <p class="hint" data-paytype-hint></p>
+      <div class="field"><span class="field-label">Colour</span><div class="swatches" id="wp-swatches"></div></div>
+      <label class="field"><span>Notes</span><textarea class="textarea" name="notes" maxlength="400" rows="2" placeholder="Address, manager, pay day…"></textarea></label>
+      <label class="switch"><input type="checkbox" name="active" checked><span></span>Active workplace</label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" type="button" data-action="close-modal">Cancel</button>
+      <button class="btn btn-primary" type="submit">Save workplace</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal" id="dlg-entry" aria-labelledby="dlg-entry-title">
+  <form class="modal-card" id="form-entry" novalidate>
+    <div class="modal-head">
+      <div><div class="mono-label">Time entry</div><h2 id="dlg-entry-title">Log work time</h2></div>
+      <button class="icon-btn sm" type="button" data-action="close-modal" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" name="id">
+      <div class="grid-2">
+        <label class="field"><span>Date *</span><input class="input" name="date" type="date" required></label>
+        <label class="field"><span>Workplace *</span><select class="select" name="workplaceId" required></select></label>
+      </div>
+      <p class="field-error" data-error="date" hidden></p>
+      <p class="field-error" data-error="workplaceId" hidden></p>
+      <label class="field"><span>Worker</span><select class="select" name="worker"></select></label>
+      <div class="grid-3">
+        <label class="field"><span>Start</span><input class="input" name="start" type="time" step="60"></label>
+        <label class="field"><span>End</span><input class="input" name="end" type="time" step="60"></label>
+        <label class="field"><span>Break (min)</span><input class="input" name="breakMin" type="number" min="0" step="1" inputmode="numeric" value="0"></label>
+      </div>
+      <p class="field-error" data-error="time" hidden></p>
+      <p class="field-error" data-error="breakMin" hidden></p>
+      <div class="grid-2" data-task-fields hidden>
+        <label class="field"><span>Task name</span><input class="input" name="taskName" maxlength="120" placeholder="e.g. Logo redesign"></label>
+        <label class="field"><span>Task payment</span><input class="input" name="taskAmount" type="number" min="0" step="0.01" inputmode="decimal"></label>
+      </div>
+      <p class="field-error" data-error="task" hidden></p>
+      <label class="field"><span>Note</span><input class="input" name="note" maxlength="200" placeholder="Optional"></label>
+      <div class="calc-preview" id="entry-preview" aria-live="polite"></div>
+      <div class="warn-box" id="entry-warning" role="alert" hidden></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" type="button" data-action="close-modal">Cancel</button>
+      <button class="btn btn-primary" type="submit" id="entry-submit">Save entry</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal" id="dlg-person" aria-labelledby="dlg-person-title">
+  <form class="modal-card" id="form-person" novalidate>
+    <div class="modal-head">
+      <div><div class="mono-label">Person</div><h2 id="dlg-person-title">Add person</h2></div>
+      <button class="icon-btn sm" type="button" data-action="close-modal" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" name="id">
+      <div class="grid-2">
+        <label class="field"><span>Name *</span><input class="input" name="name" maxlength="80" autocomplete="off" required></label>
+        <label class="field"><span>Role / job title</span><input class="input" name="role" maxlength="80"></label>
+      </div>
+      <p class="field-error" data-error="name" hidden></p>
+      <div class="grid-3">
+        <label class="field"><span>Rate type</span>
+          <select class="select" name="rateType"><option value="hourly">Hourly</option><option value="daily">Daily</option><option value="task">Per task</option></select></label>
+        <label class="field"><span>Default rate</span><input class="input" name="rate" type="number" min="0" step="0.01" inputmode="decimal"></label>
+        <label class="field"><span>Currency</span><select class="select" name="currency" data-currency-select></select></label>
+      </div>
+      <p class="field-error" data-error="rate" hidden></p>
+      <label class="field"><span>Notes</span><textarea class="textarea" name="notes" maxlength="400" rows="2"></textarea></label>
+      <label class="switch"><input type="checkbox" name="active" checked><span></span>Active</label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" type="button" data-action="close-modal">Cancel</button>
+      <button class="btn btn-primary" type="submit">Save person</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal" id="dlg-payment" aria-labelledby="dlg-pay-title">
+  <form class="modal-card" id="form-payment" novalidate>
+    <div class="modal-head">
+      <div><div class="mono-label" id="pay-kicker">Payment</div><h2 id="dlg-pay-title">Record payment</h2></div>
+      <button class="icon-btn sm" type="button" data-action="close-modal" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" name="kind"><input type="hidden" name="refId"><input type="hidden" name="month">
+      <div class="calc-preview" id="pay-preview"></div>
+      <label class="field"><span>Status</span><select class="select" name="status"></select></label>
+      <div class="grid-2">
+        <label class="field"><span>Amount received</span><input class="input" name="received" type="number" min="0" step="0.01" inputmode="decimal"></label>
+        <label class="field"><span>Payment date</span><input class="input" name="date" type="date"></label>
+      </div>
+      <p class="field-error" data-error="received" hidden></p>
+      <label class="field"><span>Payment note</span><input class="input" name="note" maxlength="200" placeholder="e.g. Bank transfer, ref #1042"></label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" type="button" data-action="close-modal">Cancel</button>
+      <button class="btn btn-primary" type="submit">Save payment</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal" id="dlg-settings" aria-labelledby="dlg-settings-title">
+  <form class="modal-card" id="form-settings" novalidate>
+    <div class="modal-head">
+      <div><div class="mono-label">Preferences</div><h2 id="dlg-settings-title">Settings</h2></div>
+      <button class="icon-btn sm" type="button" data-action="close-modal" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="grid-2">
+        <label class="field"><span>Your name</span><input class="input" name="userName" maxlength="40" placeholder="Me"></label>
+        <label class="field"><span>Default currency</span><select class="select" name="currency" data-currency-select></select></label>
+      </div>
+      <label class="field"><span>Monthly hours goal</span><input class="input" name="hoursGoal" type="number" min="1" max="744" step="1" inputmode="numeric"></label>
+      <p class="field-error" data-error="hoursGoal" hidden></p>
+      <div class="settings-block">
+        <h3>Your data</h3>
+        <p class="hint">Everything is saved in this browser's localStorage. Demo data replaces your current records.</p>
+        <div class="toolbar">
+          <button class="btn" type="button" data-action="load-demo">Load demo data</button>
+          <button class="btn btn-danger" type="button" data-action="clear-data">Clear all data</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" type="button" data-action="close-modal">Cancel</button>
+      <button class="btn btn-primary" type="submit">Save settings</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal" id="dlg-confirm" aria-labelledby="dlg-confirm-title" aria-describedby="dlg-confirm-msg">
+  <form class="modal-card" method="dialog">
+    <div class="modal-head"><div><div class="mono-label">Please confirm</div><h2 id="dlg-confirm-title">Are you sure?</h2></div></div>
+    <div class="modal-body"><p id="dlg-confirm-msg" style="margin:0;color:var(--ink-2)"></p></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" type="submit" value="cancel" autofocus>Cancel</button>
+      <button class="btn btn-primary" type="submit" value="ok" id="dlg-confirm-ok">Confirm</button>
+    </div>
+  </form>
+</dialog>
+
+<noscript><div style="position:fixed;inset:0;z-index:999;display:grid;place-items:center;background:#fff;font:16px system-ui;padding:24px;text-align:center">TimeVault needs JavaScript enabled to store and calculate your hours.</div></noscript>
+
+<!-- =========================================================
+     App logic (independent of Three.js)
+     ========================================================= -->
+<script type="module">
+'use strict';
+
+/* ---------- constants ---------- */
+const KEYS = {
+  workplaces: 'timevault_workplaces',
+  entries: 'timevault_time_entries',
+  people: 'timevault_people',
+  payments: 'timevault_payments',
+  settings: 'timevault_settings',
+  timer: 'timevault_active_timer',
+};
+const PAY_TYPES = ['hourly', 'daily', 'monthly', 'task'];
+const PAY_LABEL = { hourly: 'Hourly', daily: 'Daily', monthly: 'Monthly salary', task: 'Per task' };
+const RATE_SUFFIX = { hourly: '/ h', daily: '/ day', monthly: '/ month', task: '/ task' };
+const PERSON_RATE_TYPES = ['hourly', 'daily', 'task'];
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'BDT', 'INR', 'CAD', 'AUD', 'KRW', 'CNY', 'SGD', 'CHF', 'SEK', 'BRL', 'MXN', 'AED'];
+const WP_STATUSES = { calculated: 'Calculated', awaiting: 'Awaiting payment', paid: 'Paid', partial: 'Partially paid' };
+const PERSON_STATUSES = { awaiting: 'Awaiting payment', partial: 'Partially paid', paid: 'Paid' };
+const STATUS_CLASS = { calculated: '', awaiting: 'warn', paid: 'ok', partial: 'warn', pending: 'warn', approved: 'ok', rejected: 'bad' };
+const COLORS = ['#0E2AC5', '#2F69FF', '#7B5CFF', '#E0457B', '#F08A24', '#12996B', '#0FA3B1', '#8C9A00', '#D23C4D', '#5B6B8C'];
+const ENTRY_STATUSES = ['approved', 'pending', 'rejected'];
+
+/* ---------- small utils ---------- */
+const $ = (s, root = document) => root.querySelector(s);
+const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = (v, d = 0) => { const n = typeof v === 'string' && v.trim() === '' ? NaN : Number(v); return Number.isFinite(n) ? n : d; };
+const str = (v, d = '') => (typeof v === 'string' ? v : d);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const round2 = (v) => Math.round(v * 100) / 100;
+const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+const pad = (n) => String(n).padStart(2, '0');
+const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH_RE = /^\d{4}-\d{2}$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const dateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const timeStr = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const monthOf = (date) => String(date).slice(0, 7);
+const todayStr = () => dateStr(new Date());
+const thisMonth = () => monthOf(todayStr());
+function shiftMonth(month, delta) {
+  const [y, m] = month.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+}
+function monthLabel(month, style = 'long') {
+  if (!MONTH_RE.test(month)) return month;
+  const [y, m] = month.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: style, year: 'numeric' });
+}
+function daysInMonth(month) { const [y, m] = month.split('-').map(Number); return new Date(y, m, 0).getDate(); }
+function dateLabel(date) {
+  if (!DATE_RE.test(date)) return date;
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+}
+const minutesOf = (t) => { if (!TIME_RE.test(t || '')) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const fmtHours = (h, digits = 1) => `${(Math.round(h * 100) / 100).toFixed(digits)} h`;
+const fmtDuration = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`; };
+const initials = (name) => (String(name).trim().split(/\s+/).slice(0, 2).map((p) => p[0] || '').join('') || '?').toUpperCase();
+
+const fmtCache = new Map();
+function money(amount, currency) {
+  const cur = currency || state.settings.currency || 'USD';
+  let f = fmtCache.get(cur);
+  if (!f) {
+    try { f = new Intl.NumberFormat(undefined, { style: 'currency', currency: cur }); }
+    catch { f = { format: (n) => `${cur} ${Number(n).toFixed(2)}` }; }
+    fmtCache.set(cur, f);
+  }
+  return f.format(Number.isFinite(amount) ? amount : 0);
+}
+/* A "bag" holds amounts per currency so mixed currencies are never summed together. */
+const bag = () => ({});
+function addTo(b, cur, amt) { if (!amt) { if (!(cur in b)) b[cur] = 0; return b; } b[cur] = round2((b[cur] || 0) + amt); return b; }
+function mergeBags(...bags) { const out = bag(); bags.forEach((b) => Object.entries(b).forEach(([c, a]) => addTo(out, c, a))); return out; }
+function bagEntries(b) { return Object.entries(b).filter(([, a]) => Math.abs(a) > 0.0049).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1])); }
+function fmtBag(b) {
+  const list = bagEntries(b);
+  if (!list.length) return money(0, Object.keys(b)[0] || state.settings.currency);
+  return list.map(([c, a]) => money(a, c)).join(' + ');
+}
+
+/* ---------- storage (safe) ---------- */
+let storageOk = true;
+function readKey(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return fallback;
+    const v = JSON.parse(raw);
+    return v == null ? fallback : v;
+  } catch { return fallback; }
+}
+function writeKey(key, value) {
+  try {
+    if (value == null) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (err) {
+    if (storageOk) { storageOk = false; toast('Could not save — browser storage is unavailable or full.', 'error'); }
+    return false;
+  }
+}
+function hasAnyStoredData() {
+  try { return Object.values(KEYS).some((k) => localStorage.getItem(k) != null); } catch { return false; }
+}
+
+/* ---------- sanitizers ---------- */
+function cleanWorkplace(w, i = 0) {
+  if (!w || typeof w !== 'object') return null;
+  const name = str(w.name).trim().slice(0, 80);
+  if (!name) return null;
+  return {
+    id: str(w.id) || uid(),
+    name,
+    payType: PAY_TYPES.includes(w.payType) ? w.payType : 'hourly',
+    rate: Math.max(0, num(w.rate)),
+    currency: CURRENCIES.includes(w.currency) ? w.currency : 'USD',
+    notes: str(w.notes).slice(0, 400),
+    active: w.active !== false,
+    color: /^#[0-9a-f]{6}$/i.test(w.color) ? w.color : COLORS[i % COLORS.length],
+    createdMonth: MONTH_RE.test(w.createdMonth) ? w.createdMonth : '0000-00',
+  };
+}
+function cleanPerson(p) {
+  if (!p || typeof p !== 'object') return null;
+  const name = str(p.name).trim().slice(0, 80);
+  if (!name) return null;
+  return {
+    id: str(p.id) || uid(),
+    name,
+    role: str(p.role).slice(0, 80),
+    rateType: PERSON_RATE_TYPES.includes(p.rateType) ? p.rateType : 'hourly',
+    rate: Math.max(0, num(p.rate)),
+    currency: CURRENCIES.includes(p.currency) ? p.currency : 'USD',
+    active: p.active !== false,
+    notes: str(p.notes).slice(0, 400),
+  };
+}
+function cleanEntry(e) {
+  if (!e || typeof e !== 'object') return null;
+  if (!DATE_RE.test(e.date) || !str(e.workplaceId)) return null;
+  const worker = str(e.worker) || 'me';
+  return {
+    id: str(e.id) || uid(),
+    date: e.date,
+    workplaceId: e.workplaceId,
+    start: TIME_RE.test(e.start) ? e.start : '',
+    end: TIME_RE.test(e.end) ? e.end : '',
+    breakMin: Math.max(0, Math.round(num(e.breakMin))),
+    note: str(e.note).slice(0, 200),
+    worker,
+    taskName: str(e.taskName).slice(0, 120),
+    taskAmount: Math.max(0, num(e.taskAmount)),
+    status: worker === 'me' ? 'approved' : (ENTRY_STATUSES.includes(e.status) ? e.status : 'pending'),
+    createdAt: num(e.createdAt, Date.now()),
+  };
+}
+function cleanPayment(p) {
+  if (!p || typeof p !== 'object') return null;
+  if (!['workplace', 'person'].includes(p.kind) || !str(p.refId) || !MONTH_RE.test(p.month)) return null;
+  const statuses = p.kind === 'workplace' ? WP_STATUSES : PERSON_STATUSES;
+  return {
+    id: str(p.id) || uid(),
+    kind: p.kind, refId: p.refId, month: p.month,
+    status: p.status in statuses ? p.status : (p.kind === 'workplace' ? 'calculated' : 'awaiting'),
+    received: Math.max(0, num(p.received)),
+    date: DATE_RE.test(p.date) ? p.date : '',
+    note: str(p.note).slice(0, 200),
+  };
+}
+const cleanList = (v, fn) => (Array.isArray(v) ? v.map((x, i) => fn(x, i)).filter(Boolean) : []);
+function cleanSettings(s) {
+  s = s && typeof s === 'object' ? s : {};
+  return {
+    hoursGoal: clamp(Math.round(num(s.hoursGoal, 160)), 1, 744),
+    currency: CURRENCIES.includes(s.currency) ? s.currency : 'USD',
+    userName: str(s.userName).slice(0, 40),
+  };
+}
+function cleanTimer(t) {
+  if (!t || typeof t !== 'object') return null;
+  const startedAt = num(t.startedAt, NaN);
+  if (!Number.isFinite(startedAt) || startedAt > Date.now() + 60000 || Date.now() - startedAt > 1000 * 60 * 60 * 48) return null;
+  return { startedAt, workplaceId: str(t.workplaceId) };
+}
+
+/* ---------- state ---------- */
+const state = { workplaces: [], entries: [], people: [], payments: [], settings: cleanSettings({}), timer: null };
+
+function loadState() {
+  state.settings = cleanSettings(readKey(KEYS.settings, {}));
+  state.workplaces = cleanList(readKey(KEYS.workplaces, []), cleanWorkplace);
+  state.people = cleanList(readKey(KEYS.people, []), cleanPerson);
+  const wpIds = new Set(state.workplaces.map((w) => w.id));
+  const pIds = new Set(state.people.map((p) => p.id));
+  state.entries = cleanList(readKey(KEYS.entries, []), cleanEntry).filter((e) => wpIds.has(e.workplaceId) && (e.worker === 'me' || pIds.has(e.worker)));
+  state.payments = cleanList(readKey(KEYS.payments, []), cleanPayment);
+  state.timer = cleanTimer(readKey(KEYS.timer, null));
+}
+function save(...which) {
+  const all = which.length === 0;
+  if (all || which.includes('workplaces')) writeKey(KEYS.workplaces, state.workplaces);
+  if (all || which.includes('entries')) writeKey(KEYS.entries, state.entries);
+  if (all || which.includes('people')) writeKey(KEYS.people, state.people);
+  if (all || which.includes('payments')) writeKey(KEYS.payments, state.payments);
+  if (all || which.includes('settings')) writeKey(KEYS.settings, state.settings);
+  if (all || which.includes('timer')) writeKey(KEYS.timer, state.timer);
+}
+
+const wpById = (id) => state.workplaces.find((w) => w.id === id);
+const personById = (id) => state.people.find((p) => p.id === id);
+const workerName = (w) => (w === 'me' ? (state.settings.userName || 'Me') : (personById(w)?.name || 'Unknown'));
+
+/* ---------- calculations ---------- */
+function entryHours(e) {
+  const s = minutesOf(e.start), en = minutesOf(e.end);
+  if (s == null || en == null || en <= s) return 0;
+  return Math.max(0, en - s - e.breakMin) / 60;
+}
+/** Pay for a single entry. Monthly-salary workplaces contribute nothing per entry (fixed per month). */
+function entryPay(e) {
+  const wp = wpById(e.workplaceId);
+  const h = entryHours(e);
+  if (e.worker !== 'me') {
+    const p = personById(e.worker);
+    if (!p) return { amount: 0, currency: state.settings.currency, fixed: false };
+    let amount;
+    if (wp?.payType === 'task' && e.taskAmount > 0) amount = e.taskAmount;
+    else if (p.rateType === 'hourly') amount = h * p.rate;
+    else if (p.rateType === 'daily') amount = p.rate;
+    else amount = e.taskAmount > 0 ? e.taskAmount : p.rate;
+    return { amount: round2(amount), currency: p.currency, fixed: false };
+  }
+  if (!wp) return { amount: 0, currency: state.settings.currency, fixed: false };
+  switch (wp.payType) {
+    case 'hourly': return { amount: round2(h * wp.rate), currency: wp.currency, fixed: false };
+    case 'daily': return { amount: wp.rate, currency: wp.currency, fixed: false };
+    case 'task': return { amount: e.taskAmount, currency: wp.currency, fixed: false };
+    case 'monthly': return { amount: 0, currency: wp.currency, fixed: true };
+    default: return { amount: 0, currency: wp.currency, fixed: false };
+  }
+}
+const countsTowardPay = (e) => e.worker === 'me' || e.status === 'approved';
+const findPayment = (kind, refId, month) => state.payments.find((p) => p.kind === kind && p.refId === refId && p.month === month);
+
+/** Summary of MY work for one workplace in one month. */
+function workplaceMonth(wp, month) {
+  const list = state.entries.filter((e) => e.worker === 'me' && e.workplaceId === wp.id && monthOf(e.date) === month);
+  const hours = list.reduce((s, e) => s + entryHours(e), 0);
+  let expected;
+  if (wp.payType === 'monthly') {
+    const inRange = wp.active && month >= wp.createdMonth && month <= thisMonth();
+    expected = list.length > 0 || inRange ? wp.rate : 0;
+  } else {
+    expected = round2(list.reduce((s, e) => s + entryPay(e).amount, 0));
+  }
+  const pay = findPayment('workplace', wp.id, month);
+  const received = pay ? pay.received : 0;
+  return {
+    wp, month, list, hours, entries: list.length, days: new Set(list.map((e) => e.date)).size,
+    expected, received, diff: round2(expected - received),
+    status: pay ? pay.status : 'calculated', payment: pay, currency: wp.currency,
+  };
+}
+/** Summary of one person's APPROVED work in one month. */
+function personMonth(p, month) {
+  const all = state.entries.filter((e) => e.worker === p.id && monthOf(e.date) === month);
+  const list = all.filter((e) => e.status === 'approved');
+  const hours = list.reduce((s, e) => s + entryHours(e), 0);
+  const expected = round2(list.reduce((s, e) => s + entryPay(e).amount, 0));
+  const pay = findPayment('person', p.id, month);
+  const received = pay ? pay.received : 0;
+  return {
+    p, month, list, hours, entries: list.length, pending: all.filter((e) => e.status === 'pending').length,
+    expected, received, diff: round2(expected - received),
+    status: pay ? pay.status : (expected > 0 ? 'awaiting' : 'awaiting'), payment: pay, currency: p.currency,
+  };
+}
+function relevantWorkplaces(month) {
+  return state.workplaces.filter((wp) => {
+    const s = workplaceMonth(wp, month);
+    return s.entries > 0 || s.expected > 0 || s.payment;
+  });
+}
+function myMonthTotals(month) {
+  const hours = state.entries.filter((e) => e.worker === 'me' && monthOf(e.date) === month).reduce((s, e) => s + entryHours(e), 0);
+  const expected = bag(), received = bag(), unpaid = bag();
+  state.workplaces.forEach((wp) => {
+    const s = workplaceMonth(wp, month);
+    if (!s.entries && !s.expected && !s.payment) return;
+    addTo(expected, wp.currency, s.expected);
+    addTo(received, wp.currency, s.received);
+    addTo(unpaid, wp.currency, Math.max(0, s.diff));
+  });
+  return { hours, expected, received, unpaid };
+}
+function allMonthsUnpaid() {
+  const months = new Set([thisMonth()]);
+  state.entries.forEach((e) => { if (e.worker === 'me') months.add(monthOf(e.date)); });
+  state.payments.forEach((p) => { if (p.kind === 'workplace') months.add(p.month); });
+  const out = bag();
+  let count = 0;
+  months.forEach((m) => {
+    if (m > thisMonth()) return;
+    state.workplaces.forEach((wp) => {
+      const s = workplaceMonth(wp, m);
+      if (s.diff > 0.004) { addTo(out, wp.currency, s.diff); count++; }
+    });
+  });
+  return { bag: out, count };
+}
+
+/* ---------- toast ---------- */
+function toast(message, type = 'ok') {
+  const host = $('#toasts');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  el.innerHTML = `<i aria-hidden="true">${type === 'error' ? '!' : type === 'info' ? 'i' : '✓'}</i><span>${esc(message)}</span>`;
+  host.appendChild(el);
+  while (host.children.length > 4) host.firstElementChild.remove();
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 420); }, 3200);
+}
+
+/* ---------- count-up numbers ---------- */
+const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+function countTo(el, value, format) {
+  if (!el) return;
+  const from = num(el.dataset.v, 0);
+  el.dataset.v = String(value);
+  if (prefersReducedMotion || Math.abs(from - value) < 0.005 || !document.body.classList.contains('ready')) { el.textContent = format(value); return; }
+  const start = performance.now(), dur = 900, token = (el._countToken = (el._countToken || 0) + 1);
+  const step = (now) => {
+    if (el._countToken !== token) return;
+    const t = clamp((now - start) / dur, 0, 1);
+    el.textContent = format(from + (value - from) * easeOut(t));
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+function countBag(el, b) {
+  const list = bagEntries(b);
+  if (list.length <= 1) {
+    const [cur, amt] = list[0] || [Object.keys(b)[0] || state.settings.currency, 0];
+    if (el.dataset.cur !== cur) { el.dataset.cur = cur; el.dataset.v = '0'; }
+    countTo(el, amt, (v) => money(v, cur));
+  } else {
+    el._countToken = (el._countToken || 0) + 1;
+    el.dataset.cur = ''; el.dataset.v = '0';
+    el.textContent = fmtBag(b);
+  }
+}
+
+/* ---------- UI view state ---------- */
+const view = {
+  wpFilter: 'all',
+  entryMonth: thisMonth(),
+  entryWp: 'all',
+  entryPerson: 'all',
+  salaryMonth: thisMonth(),
+  peopleMonth: thisMonth(),
+  reportMonth: thisMonth(),
+  reportWp: 'all',
+  reportPerson: 'me',
+  showArchived: false,
+};
+
+/* ---------- empty-state illustrations ---------- */
+const ILLUSTRATIONS = {
+  clock: `<svg viewBox="0 0 120 96" aria-hidden="true"><ellipse cx="60" cy="88" rx="38" ry="5" fill="#0E2AC5" opacity=".08"/><circle cx="60" cy="46" r="34" fill="#fff" stroke="#0E2AC5" stroke-width="3"/><circle cx="60" cy="46" r="26" fill="#ecefff"/><path d="M60 30v17l11 7" stroke="#2F69FF" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="60" cy="46" r="3.5" fill="#0E2AC5"/><circle cx="98" cy="20" r="9" fill="#e8ff9c" stroke="#0E2AC5" stroke-width="2"/><path d="M98 15v5h4" stroke="#0E2AC5" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`,
+  building: `<svg viewBox="0 0 120 96" aria-hidden="true"><ellipse cx="60" cy="88" rx="40" ry="5" fill="#0E2AC5" opacity=".08"/><rect x="30" y="22" width="40" height="62" rx="6" fill="#fff" stroke="#0E2AC5" stroke-width="3"/><rect x="70" y="42" width="24" height="42" rx="5" fill="#ecefff" stroke="#0E2AC5" stroke-width="3"/><g fill="#2F69FF"><rect x="38" y="32" width="8" height="8" rx="2"/><rect x="54" y="32" width="8" height="8" rx="2"/><rect x="38" y="48" width="8" height="8" rx="2"/><rect x="54" y="48" width="8" height="8" rx="2" opacity=".4"/></g><rect x="44" y="66" width="12" height="18" rx="2" fill="#0E2AC5"/><circle cx="96" cy="22" r="10" fill="#ffd1d5" stroke="#0E2AC5" stroke-width="2"/><path d="M92 22h8M96 18v8" stroke="#0E2AC5" stroke-width="2" stroke-linecap="round"/></svg>`,
+  people: `<svg viewBox="0 0 120 96" aria-hidden="true"><ellipse cx="60" cy="88" rx="40" ry="5" fill="#0E2AC5" opacity=".08"/><circle cx="44" cy="36" r="14" fill="#fff" stroke="#0E2AC5" stroke-width="3"/><path d="M20 82c2-16 12-24 24-24s22 8 24 24" fill="#ecefff" stroke="#0E2AC5" stroke-width="3"/><circle cx="80" cy="42" r="11" fill="#e8ff9c" stroke="#0E2AC5" stroke-width="3"/><path d="M62 82c1-12 8-19 18-19s17 7 18 19" fill="#fff" stroke="#0E2AC5" stroke-width="3"/></svg>`,
+  coins: `<svg viewBox="0 0 120 96" aria-hidden="true"><ellipse cx="60" cy="88" rx="40" ry="5" fill="#0E2AC5" opacity=".08"/><ellipse cx="50" cy="74" rx="26" ry="8" fill="#ecefff" stroke="#0E2AC5" stroke-width="3"/><ellipse cx="50" cy="62" rx="26" ry="8" fill="#fff" stroke="#0E2AC5" stroke-width="3"/><ellipse cx="50" cy="50" rx="26" ry="8" fill="#ffd1d5" stroke="#0E2AC5" stroke-width="3"/><circle cx="88" cy="34" r="16" fill="#fff" stroke="#2F69FF" stroke-width="3"/><path d="M88 26v16M84 30h6a3 3 0 0 1 0 6h-4a3 3 0 0 0 0 6h6" stroke="#2F69FF" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`,
+};
+function emptyState(kind, title, text, actionHtml = '') {
+  return `<div class="empty">${ILLUSTRATIONS[kind] || ''}<h3>${esc(title)}</h3><p>${esc(text)}</p>${actionHtml}</div>`;
+}
+function badge(status, label) { return `<span class="badge ${STATUS_CLASS[status] ?? ''}">${esc(label)}</span>`; }
+const statusLabel = (kind, s) => (kind === 'workplace' ? WP_STATUSES : PERSON_STATUSES)[s] || s;
+
+/* =========================================================
+   Rendering
+   ========================================================= */
+function renderAll() {
+  populateSelects();
+  renderHero();
+  renderWorkplaces();
+  renderEntries();
+  renderSalary();
+  renderPeople();
+  renderReports();
+  renderTimer();
+}
+
+function renderHero() {
+  const m = thisMonth();
+  const t = myMonthTotals(m);
+  countTo($('#stat-hours'), t.hours, (v) => fmtHours(v));
+  const goal = state.settings.hoursGoal;
+  $('#stat-hours-foot').textContent = `${Math.round((t.hours / goal) * 100)}% of ${goal} h goal`;
+  countBag($('#stat-expected'), t.expected);
+  $('#stat-expected-foot').textContent = monthLabel(m);
+  countBag($('#stat-paid'), t.received);
+  const exp = bagEntries(t.expected), rec = t.received;
+  const pct = exp.length === 1 && exp[0][1] > 0 ? Math.round(((rec[exp[0][0]] || 0) / exp[0][1]) * 100) : null;
+  $('#stat-paid-foot').textContent = pct == null ? 'Recorded payments' : `${pct}% of expected`;
+  const un = allMonthsUnpaid();
+  countBag($('#stat-unpaid'), un.bag);
+  $('#stat-unpaid-foot').textContent = un.count ? `${un.count} open workplace-month${un.count > 1 ? 's' : ''}` : 'All settled ✓';
+}
+
+function renderWorkplaces() {
+  const grid = $('#wp-grid');
+  $$('[data-wp-filter]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.wpFilter === view.wpFilter)));
+  const m = thisMonth();
+  const list = state.workplaces.filter((w) => view.wpFilter === 'all' || (view.wpFilter === 'active' ? w.active : !w.active));
+  if (!state.workplaces.length) {
+    grid.innerHTML = emptyState('building', 'No workplaces yet', 'Add the places that pay you — a café, a studio, a client — with their pay type and rate.', '<button class="btn btn-primary" type="button" data-action="add-workplace">Add your first workplace</button>');
+    return;
+  }
+  if (!list.length) {
+    grid.innerHTML = emptyState('building', `No ${view.wpFilter} workplaces`, 'Try another filter to see the rest of your workplaces.');
+    return;
+  }
+  // Remember previous numbers so count-up animates from old values after re-render.
+  const prev = {};
+  $$('[data-count]', grid).forEach((el) => { prev[el.dataset.count] = el.dataset.v; });
+  grid.innerHTML = list.map((wp) => {
+    const s = workplaceMonth(wp, m);
+    return `<article class="glass card lift wp-card ${wp.active ? '' : 'inactive'}" data-tilt data-id="${esc(wp.id)}">
+      <div class="wp-top">
+        <div class="wp-dot" style="background:${esc(wp.color)}" aria-hidden="true">${esc(initials(wp.name))}</div>
+        <div style="min-width:0;flex:1">
+          <h3 class="wp-name">${esc(wp.name)}</h3>
+          <div class="wp-meta"><span class="badge plain">${esc(PAY_LABEL[wp.payType])}</span>${wp.active ? '<span class="badge ok">Active</span>' : '<span class="badge muted">Inactive</span>'}</div>
+        </div>
+      </div>
+      <div class="wp-rate">${esc(money(wp.rate, wp.currency))} ${esc(RATE_SUFFIX[wp.payType])} · ${esc(wp.currency)}</div>
+      <div class="wp-stats">
+        <div class="wp-stat"><span class="mono-label" style="font-size:10px;color:var(--ink-2)">Hours · ${esc(monthLabel(m, 'short'))}</span><b data-count="h-${esc(wp.id)}" data-v="${esc(prev['h-' + wp.id] ?? 0)}">${esc(fmtHours(num(prev['h-' + wp.id])))}</b></div>
+        <div class="wp-stat"><span class="mono-label" style="font-size:10px;color:var(--ink-2)">${wp.payType === 'monthly' ? 'Fixed salary' : 'Calculated pay'}</span><b data-count="p-${esc(wp.id)}" data-v="${esc(prev['p-' + wp.id] ?? 0)}">${esc(money(num(prev['p-' + wp.id]), wp.currency))}</b></div>
+      </div>
+      ${wp.notes ? `<p class="wp-notes">${esc(wp.notes)}</p>` : ''}
+      <div class="wp-actions">
+        <label class="switch"><input type="checkbox" data-action="toggle-workplace" data-id="${esc(wp.id)}" ${wp.active ? 'checked' : ''}><span></span>${wp.active ? 'Active' : 'Inactive'}</label>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" type="button" data-action="edit-workplace" data-id="${esc(wp.id)}">Edit</button>
+        <button class="btn btn-sm btn-danger" type="button" data-action="delete-workplace" data-id="${esc(wp.id)}" aria-label="Delete ${esc(wp.name)}">Delete</button>
+      </div>
+    </article>`;
+  }).join('');
+  list.forEach((wp) => {
+    const s = workplaceMonth(wp, m);
+    countTo(grid.querySelector(`[data-count="h-${CSS.escape(wp.id)}"]`), s.hours, (v) => fmtHours(v));
+    countTo(grid.querySelector(`[data-count="p-${CSS.escape(wp.id)}"]`), s.expected, (v) => money(v, wp.currency));
+  });
+}
+
+function filteredEntries() {
+  return state.entries.filter((e) =>
+    (view.entryMonth === 'all' || monthOf(e.date) === view.entryMonth) &&
+    (view.entryWp === 'all' || e.workplaceId === view.entryWp) &&
+    (view.entryPerson === 'all' || e.worker === view.entryPerson)
+  ).sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start) || b.createdAt - a.createdAt);
+}
+
+const ENTRY_PAGE = 40;
+let entryLimit = ENTRY_PAGE;
+function renderEntries() {
+  const list = filteredEntries();
+  const body = $('#entries-body'), empty = $('#entries-empty'), foot = $('#entries-foot');
+  const table = $('#entries-table');
+  if (!list.length) {
+    body.innerHTML = '';
+    table.hidden = true;
+    empty.hidden = false;
+    const none = state.entries.length === 0;
+    empty.innerHTML = emptyState('clock', none ? 'No time entries yet — start your first timer.' : 'Nothing matches these filters', none ? 'Hit “Start timer” when you begin a shift, or log hours after the fact.' : 'Try another month, workplace or person.',
+      none ? '<div class="toolbar" style="justify-content:center"><button class="btn btn-bright" type="button" data-action="toggle-timer" data-timer-btn>Start timer</button><button class="btn" type="button" data-action="add-entry">Log time manually</button></div>' : '');
+    foot.hidden = true;
+    syncTimerButtons();
+    return;
+  }
+  table.hidden = false; empty.hidden = true; foot.hidden = false;
+  const shown = list.slice(0, entryLimit);
+  body.innerHTML = shown.map((e) => {
+    const wp = wpById(e.workplaceId);
+    const pay = entryPay(e);
+    const h = entryHours(e);
+    const isMe = e.worker === 'me';
+    const statusHtml = isMe ? '<span class="badge muted plain">Own</span>' : badge(e.status, e.status[0].toUpperCase() + e.status.slice(1));
+    const timeTxt = e.start && e.end ? `${e.start}–${e.end}${e.breakMin ? ` <span class="cell-sub">${e.breakMin} min break</span>` : ''}` : '<span class="cell-sub">No times</span>';
+    const payTxt = pay.fixed ? `<span class="cell-sub">In monthly salary</span>` : esc(money(pay.amount, pay.currency));
+    const approve = !isMe && e.status !== 'approved' ? `<button class="btn btn-sm" type="button" data-action="approve-entry" data-id="${esc(e.id)}">Approve</button>` : '';
+    const reject = !isMe && e.status !== 'rejected' ? `<button class="btn btn-sm btn-danger" type="button" data-action="reject-entry" data-id="${esc(e.id)}">Reject</button>` : '';
+    return `<tr>
+      <td class="primary" data-label="Date"><span class="num">${esc(dateLabel(e.date))}</span></td>
+      <td data-label="Workplace"><span class="cell-wp"><i style="background:${esc(wp?.color || '#999')}" aria-hidden="true"></i><span>${esc(wp?.name || '—')}${e.taskName ? `<span class="cell-sub">${esc(e.taskName)}</span>` : ''}${e.note ? `<span class="cell-sub">“${esc(e.note)}”</span>` : ''}</span></span></td>
+      <td data-label="Person">${esc(workerName(e.worker))}</td>
+      <td data-label="Time" class="num">${timeTxt}</td>
+      <td data-label="Hours" class="right num">${esc(h.toFixed(2))}</td>
+      <td data-label="Pay" class="right num">${payTxt}</td>
+      <td data-label="Status">${statusHtml}</td>
+      <td class="actions-cell"><div class="row-actions">${approve}${reject}
+        <button class="btn btn-sm" type="button" data-action="edit-entry" data-id="${esc(e.id)}">Edit</button>
+        <button class="icon-btn sm" type="button" data-action="delete-entry" data-id="${esc(e.id)}" aria-label="Delete entry on ${esc(e.date)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  const hours = list.filter(countsTowardPay).reduce((s, e) => s + entryHours(e), 0);
+  const payBag = bag();
+  list.filter(countsTowardPay).forEach((e) => { const p = entryPay(e); if (!p.fixed) addTo(payBag, p.currency, p.amount); });
+  foot.innerHTML = `<span>${list.length} entr${list.length === 1 ? 'y' : 'ies'} · ${esc(fmtHours(hours, 2))} counted · ${esc(fmtBag(payBag))} entry pay</span>` +
+    (list.length > shown.length ? `<button class="btn btn-sm" type="button" data-action="more-entries">Show ${Math.min(ENTRY_PAGE, list.length - shown.length)} more</button>` : '');
+}
+
+function setRing(el, pct) {
+  const r = 52, c = 2 * Math.PI * r;
+  el.style.strokeDasharray = `${c}`;
+  el.style.strokeDashoffset = `${c * (1 - clamp(pct, 0, 1))}`;
+}
+
+function renderSalary() {
+  const m = view.salaryMonth;
+  setMonthPicker('salary', m);
+  const rows = relevantWorkplaces(m).map((wp) => workplaceMonth(wp, m));
+  const body = $('#salary-body'), empty = $('#salary-empty');
+  const tableWrap = body.closest('.table-wrap');
+  if (!rows.length) {
+    body.innerHTML = ''; tableWrap.hidden = true; empty.hidden = false;
+    empty.innerHTML = emptyState('coins', `Nothing to calculate for ${monthLabel(m)}`, 'Log some time for this month and your expected salary will appear here.', '<button class="btn btn-primary" type="button" data-action="add-entry">Log work time</button>');
+  } else {
+    tableWrap.hidden = false; empty.hidden = true;
+    body.innerHTML = rows.map((s) => {
+      const pct = s.expected > 0 ? s.received / s.expected : (s.received > 0 ? 1 : 0);
+      const diffCls = s.diff > 0.004 ? 'diff-neg' : s.diff < -0.004 ? 'diff-pos' : '';
+      const diffTxt = Math.abs(s.diff) < 0.005 ? '—' : (s.diff > 0 ? `${money(s.diff, s.currency)} owed` : `+${money(-s.diff, s.currency)} extra`);
+      return `<tr>
+        <td class="primary" data-label="Workplace"><span class="cell-wp"><i style="background:${esc(s.wp.color)}" aria-hidden="true"></i><span>${esc(s.wp.name)}<span class="cell-sub">${esc(PAY_LABEL[s.wp.payType])}${s.payment?.note ? ' · ' + esc(s.payment.note) : ''}${s.payment?.date ? ' · paid ' + esc(s.payment.date) : ''}</span></span></span></td>
+        <td data-label="Hours" class="right num">${esc(s.hours.toFixed(2))}</td>
+        <td data-label="Entries" class="right num">${s.entries}<span class="cell-sub">${s.days} day${s.days === 1 ? '' : 's'}</span></td>
+        <td data-label="Expected" class="right num">${esc(money(s.expected, s.currency))}</td>
+        <td data-label="Received" class="right num">${esc(money(s.received, s.currency))}<div class="progress ${pct >= 1 ? 'ok' : ''}" style="margin-top:6px"><span data-w="${clamp(pct * 100, 0, 100).toFixed(1)}"></span></div></td>
+        <td data-label="Difference" class="right num ${diffCls}">${esc(diffTxt)}</td>
+        <td data-label="Status">${badge(s.status, statusLabel('workplace', s.status))}</td>
+        <td class="actions-cell"><div class="row-actions"><button class="btn btn-sm btn-bright" type="button" data-action="pay-workplace" data-id="${esc(s.wp.id)}" data-month="${esc(m)}">Record payment</button></div></td>
+      </tr>`;
+    }).join('');
+    animateProgress(body);
+  }
+
+  // Rings & totals
+  const t = myMonthTotals(m);
+  const exp = bagEntries(t.expected);
+  let ratio = 0, ratioTxt = '—';
+  if (exp.length === 1) {
+    const [cur, amt] = exp[0];
+    ratio = amt > 0 ? (t.received[cur] || 0) / amt : 0;
+    ratioTxt = `${money(t.received[cur] || 0, cur)} of ${money(amt, cur)}`;
+  } else if (exp.length > 1) {
+    // Mixed currencies: average of each currency's ratio.
+    ratio = exp.reduce((s, [c, a]) => s + (a > 0 ? Math.min(1, (t.received[c] || 0) / a) : 0), 0) / exp.length;
+    ratioTxt = `Mixed currencies: ${fmtBag(t.received)} received`;
+  } else {
+    ratioTxt = 'No expected pay this month';
+  }
+  setRing($('#ring-received'), ratio);
+  $('#ring-received-label').textContent = `${Math.round(ratio * 100)}%`;
+  $('#ring-received-title').textContent = `${Math.round(ratio * 100)}% of expected`;
+  $('#ring-received-sub').textContent = ratioTxt;
+
+  const goal = state.settings.hoursGoal;
+  setRing($('#ring-hours'), t.hours / goal);
+  $('#ring-hours-label').textContent = `${Math.round((t.hours / goal) * 100)}%`;
+  $('#ring-hours-title').textContent = `${t.hours.toFixed(1)} of ${goal} h`;
+  const goalInput = $('#goal-input');
+  if (document.activeElement !== goalInput) goalInput.value = goal;
+
+  const totalDays = new Set(state.entries.filter((e) => e.worker === 'me' && monthOf(e.date) === m).map((e) => e.date)).size;
+  $('#salary-totals').innerHTML = `
+    <div class="mono-label" style="display:block">${esc(monthLabel(m))}</div>
+    <div><span>Total hours</span><b>${esc(fmtHours(t.hours, 2))}</b></div>
+    <div><span>Work days</span><b>${totalDays}</b></div>
+    <div><span>Expected</span><b>${esc(fmtBag(t.expected))}</b></div>
+    <div><span>Received</span><b>${esc(fmtBag(t.received))}</b></div>
+    <div><span>Unpaid</span><b class="${bagEntries(t.unpaid).length ? 'diff-neg' : ''}">${esc(fmtBag(t.unpaid))}</b></div>`;
+}
+
+function animateProgress(root) {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    $$('.progress span[data-w], .hbar-track span[data-w]', root).forEach((s) => { s.style.width = s.dataset.w + '%'; });
+    $$('.bar[data-h]', root).forEach((s) => { s.style.height = s.dataset.h + '%'; });
+  }));
+}
+
+function renderPeople() {
+  const m = view.peopleMonth;
+  setMonthPicker('people', m);
+  $('#show-archived').checked = view.showArchived;
+  const grid = $('#people-grid');
+  const list = state.people.filter((p) => view.showArchived || p.active);
+  if (!state.people.length) {
+    grid.innerHTML = emptyState('people', 'No people yet', 'Add helpers who sometimes work for you. Their entries start as pending until you approve them.', '<button class="btn btn-primary" type="button" data-action="add-person">Add a person</button>');
+  } else if (!list.length) {
+    grid.innerHTML = emptyState('people', 'Everyone is archived', 'Turn on “Archived” to see archived people.');
+  } else {
+    grid.innerHTML = list.map((p) => {
+      const s = personMonth(p, m);
+      const pct = s.expected > 0 ? s.received / s.expected : 0;
+      return `<article class="glass card lift person-card ${p.active ? '' : 'archived'}">
+        <div class="person-top">
+          <div class="avatar" aria-hidden="true">${esc(initials(p.name))}</div>
+          <div style="min-width:0;flex:1"><h3 class="person-name">${esc(p.name)}</h3><div class="person-role">${esc(p.role || 'Helper')} · ${esc(money(p.rate, p.currency))} ${esc(RATE_SUFFIX[p.rateType])}</div></div>
+          ${p.active ? '' : '<span class="badge muted">Archived</span>'}
+        </div>
+        <div class="wp-stats">
+          <div class="wp-stat"><span class="mono-label" style="font-size:10px;color:var(--ink-2)">Approved hours</span><b>${esc(fmtHours(s.hours))}</b></div>
+          <div class="wp-stat"><span class="mono-label" style="font-size:10px;color:var(--ink-2)">Expected pay</span><b>${esc(money(s.expected, s.currency))}</b></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          ${badge(s.status, statusLabel('person', s.status))}
+          <span class="num" style="font-size:13px;color:var(--ink-2)">Paid ${esc(money(s.received, s.currency))}</span>
+        </div>
+        <div class="progress ${pct >= 1 ? 'ok' : ''}"><span data-w="${clamp(pct * 100, 0, 100).toFixed(1)}"></span></div>
+        ${s.pending ? `<div class="hint">${s.pending} entr${s.pending === 1 ? 'y' : 'ies'} waiting for approval</div>` : ''}
+        ${p.notes ? `<p class="wp-notes">${esc(p.notes)}</p>` : ''}
+        <div class="wp-actions">
+          <button class="btn btn-sm btn-bright" type="button" data-action="pay-person" data-id="${esc(p.id)}" data-month="${esc(m)}">Payment</button>
+          <span class="spacer"></span>
+          <button class="btn btn-sm" type="button" data-action="edit-person" data-id="${esc(p.id)}">Edit</button>
+          <button class="btn btn-sm" type="button" data-action="archive-person" data-id="${esc(p.id)}">${p.active ? 'Archive' : 'Restore'}</button>
+          <button class="icon-btn sm" type="button" data-action="delete-person" data-id="${esc(p.id)}" aria-label="Delete ${esc(p.name)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+        </div>
+      </article>`;
+    }).join('');
+    animateProgress(grid);
+  }
+
+  // Pending approvals (all months)
+  const pending = state.entries.filter((e) => e.worker !== 'me' && e.status === 'pending').sort((a, b) => b.date.localeCompare(a.date));
+  $('#pending-list').innerHTML = pending.length ? pending.slice(0, 12).map((e) => {
+    const pay = entryPay(e);
+    return `<li><div class="who"><b>${esc(workerName(e.worker))}</b><small>${esc(dateLabel(e.date))} · ${esc(wpById(e.workplaceId)?.name || '—')} · ${esc(entryHours(e).toFixed(2))} h · ${esc(money(pay.amount, pay.currency))}</small></div>
+      <div class="row-actions"><button class="btn btn-sm" type="button" data-action="approve-entry" data-id="${esc(e.id)}">Approve</button><button class="btn btn-sm btn-danger" type="button" data-action="reject-entry" data-id="${esc(e.id)}">Reject</button></div></li>`;
+  }).join('') + (pending.length > 12 ? `<li class="empty-li">+ ${pending.length - 12} more in Time entries</li>` : '') : '<li class="empty-li">No entries waiting — all caught up ✓</li>';
+
+  // Unpaid balances for the month
+  const unpaid = state.people.map((p) => personMonth(p, m)).filter((s) => s.diff > 0.004);
+  $('#unpaid-list').innerHTML = unpaid.length ? unpaid.map((s) => `<li><div class="who"><b>${esc(s.p.name)}</b><small>${esc(statusLabel('person', s.status))} · expected ${esc(money(s.expected, s.currency))}</small></div>
+      <b class="num diff-neg">${esc(money(s.diff, s.currency))}</b>
+      <button class="btn btn-sm btn-bright" type="button" data-action="pay-person" data-id="${esc(s.p.id)}" data-month="${esc(m)}">Pay</button></li>`).join('')
+    : `<li class="empty-li">Nobody is owed anything for ${esc(monthLabel(m))}</li>`;
+}
+
+/* ---------- reports ---------- */
+function reportData() {
+  const m = view.reportMonth, wpF = view.reportWp, pF = view.reportPerson;
+  const includeMe = pF === 'me' || pF === 'everyone';
+  const personMatch = (w) => (pF === 'everyone' || pF === 'people') ? w !== 'me' : w === pF;
+  const entries = state.entries.filter((e) => monthOf(e.date) === m && (wpF === 'all' || e.workplaceId === wpF) &&
+    (e.worker === 'me' ? includeMe : (pF !== 'me' && personMatch(e.worker))))
+    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  const counted = entries.filter(countsTowardPay);
+  const hours = counted.reduce((s, e) => s + entryHours(e), 0);
+  const expected = bag(), received = bag(), unpaid = bag();
+  const byWp = new Map();
+  const summary = [];
+  const wpBucket = (wp) => { if (!byWp.has(wp.id)) byWp.set(wp.id, { wp, bag: bag() }); return byWp.get(wp.id); };
+
+  if (includeMe) {
+    state.workplaces.filter((wp) => wpF === 'all' || wp.id === wpF).forEach((wp) => {
+      const s = workplaceMonth(wp, m);
+      if (!s.entries && !s.expected && !s.payment) return;
+      addTo(expected, wp.currency, s.expected);
+      addTo(received, wp.currency, s.received);
+      addTo(unpaid, wp.currency, Math.max(0, s.diff));
+      addTo(wpBucket(wp).bag, wp.currency, s.expected);
+      summary.push({ type: 'Workplace', name: wp.name, hours: s.hours, entries: s.entries, expected: s.expected, received: s.received, diff: s.diff, currency: wp.currency, status: statusLabel('workplace', s.status) });
+    });
+  }
+  if (pF !== 'me') {
+    state.people.filter((p) => personMatch(p.id)).forEach((p) => {
+      const full = personMonth(p, m);
+      const list = full.list.filter((e) => wpF === 'all' || e.workplaceId === wpF);
+      const exp = round2(list.reduce((s, e) => s + entryPay(e).amount, 0));
+      // Person payments are monthly totals; allocate proportionally when one workplace is selected.
+      const rec = wpF === 'all' ? full.received : (full.expected > 0 ? round2(full.received * (exp / full.expected)) : 0);
+      if (!list.length && !rec && !full.payment) return;
+      addTo(expected, p.currency, exp);
+      addTo(received, p.currency, rec);
+      addTo(unpaid, p.currency, Math.max(0, exp - rec));
+      list.forEach((e) => { const wp = wpById(e.workplaceId); if (wp) addTo(wpBucket(wp).bag, p.currency, entryPay(e).amount); });
+      summary.push({ type: 'Person', name: p.name, hours: list.reduce((s, e) => s + entryHours(e), 0), entries: list.length, expected: exp, received: rec, diff: round2(exp - rec), currency: p.currency, status: statusLabel('person', full.status) });
+    });
+  }
+  const days = Array.from({ length: daysInMonth(m) }, () => 0);
+  counted.forEach((e) => { const d = Number(e.date.slice(8, 10)); if (d >= 1 && d <= days.length) days[d - 1] += entryHours(e); });
+  return { m, entries, counted, hours, expected, received, unpaid, byWp: [...byWp.values()], summary, days };
+}
+
+function renderReports() {
+  setMonthPicker('reports', view.reportMonth);
+  const r = reportData();
+  countTo($('#r-hours'), r.hours, (v) => fmtHours(v));
+  $('#r-hours-foot').textContent = `${r.counted.length} counted entr${r.counted.length === 1 ? 'y' : 'ies'}`;
+  countBag($('#r-expected'), r.expected);
+  countBag($('#r-received'), r.received);
+  countBag($('#r-unpaid'), r.unpaid);
+  $('#chart-days-title').textContent = monthLabel(r.m);
+
+  // Daily hours bar chart
+  const max = Math.max(4, ...r.days);
+  const niceMax = Math.ceil(max / 2) * 2;
+  const [y, mo] = r.m.split('-').map(Number);
+  const grid = `<div class="chart-grid" aria-hidden="true">${[0.5, 1].map((f) => `<div class="chart-gridline" style="bottom:${f * 100}%"><span>${(niceMax * f).toFixed(0)}h</span></div>`).join('')}</div>`;
+  const monShort = new Date(y, mo - 1, 1).toLocaleDateString(undefined, { month: 'short' });
+  $('#chart-days').innerHTML = grid + r.days.map((h, i) => {
+    const dow = new Date(y, mo - 1, i + 1).getDay();
+    const pct = (h / niceMax) * 100;
+    return `<div class="col ${dow === 0 || dow === 6 ? 'weekend' : ''}"><div class="bar-area"><div class="bar ${h ? '' : 'zero'}" data-h="${pct.toFixed(1)}"><span class="tip">${i + 1} ${esc(monShort)} · ${h.toFixed(2)} h</span></div></div><span>${i + 1}</span></div>`;
+  }).join('');
+  $('#chart-days').setAttribute('aria-label', `Daily worked hours for ${monthLabel(r.m)}. Total ${r.hours.toFixed(1)} hours on ${r.days.filter(Boolean).length} days.`);
+
+  // Pay by workplace (scaled within each currency so currencies never mix)
+  const rows = [];
+  r.byWp.forEach(({ wp, bag: b }) => bagEntries(b).forEach(([cur, amt]) => rows.push({ wp, cur, amt })));
+  const maxBy = {};
+  rows.forEach((x) => { maxBy[x.cur] = Math.max(maxBy[x.cur] || 0, x.amt); });
+  rows.sort((a, b) => b.amt - a.amt);
+  $('#chart-wp').innerHTML = rows.length ? rows.map((x) => `<div class="hbar-row">
+      <div class="hbar-head"><span><i style="background:${esc(x.wp.color)}" aria-hidden="true"></i>${esc(x.wp.name)}</span><b>${esc(money(x.amt, x.cur))}</b></div>
+      <div class="hbar-track"><span style="background:linear-gradient(90deg, ${esc(x.wp.color)}, ${esc(x.wp.color)}99)" data-w="${((x.amt / (maxBy[x.cur] || 1)) * 100).toFixed(1)}"></span></div>
+    </div>`).join('') : emptyState('coins', 'No pay in this view', 'Change the month, workplace or person to see where the money comes from.');
+  animateProgress($('#reports'));
+  $('#print-meta').textContent = `${monthLabel(r.m)} · ${view.reportWp === 'all' ? 'All workplaces' : (wpById(view.reportWp)?.name || '')} · ${reportPersonLabel()} · generated ${new Date().toLocaleString()}`;
+}
+function reportPersonLabel() {
+  const p = view.reportPerson;
+  return p === 'me' ? workerName('me') : p === 'people' ? 'All people' : p === 'everyone' ? 'Everyone' : workerName(p);
+}
+
+function csvCell(v) {
+  const s = String(v ?? '');
+  // Guard against spreadsheet formula injection.
+  const safe = /^[=+\-@\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s) ? `'${s}` : s;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+}
+function downloadCsv() {
+  const r = reportData();
+  const lines = [];
+  lines.push(['TimeVault export', monthLabel(r.m), view.reportWp === 'all' ? 'All workplaces' : wpById(view.reportWp)?.name, reportPersonLabel()].map(csvCell).join(','));
+  lines.push('');
+  lines.push(['Date', 'Workplace', 'Person', 'Start', 'End', 'Break (min)', 'Hours', 'Pay type', 'Task', 'Pay', 'Currency', 'Status', 'Counts toward pay', 'Note'].join(','));
+  r.entries.forEach((e) => {
+    const wp = wpById(e.workplaceId), pay = entryPay(e);
+    lines.push([e.date, wp?.name, workerName(e.worker), e.start, e.end, e.breakMin, entryHours(e).toFixed(2), wp ? PAY_LABEL[wp.payType] : '', e.taskName,
+      pay.fixed ? 'monthly salary' : pay.amount.toFixed(2), pay.currency, e.worker === 'me' ? 'own' : e.status, countsTowardPay(e) ? 'yes' : 'no', e.note].map(csvCell).join(','));
+  });
+  lines.push('');
+  lines.push('Salary summary');
+  lines.push(['Type', 'Name', 'Hours', 'Entries', 'Expected', 'Received', 'Difference', 'Currency', 'Status'].join(','));
+  r.summary.forEach((s) => lines.push([s.type, s.name, s.hours.toFixed(2), s.entries, s.expected.toFixed(2), s.received.toFixed(2), s.diff.toFixed(2), s.currency, s.status].map(csvCell).join(',')));
+  lines.push('');
+  lines.push(['Totals', 'Hours', fmtHours(r.hours, 2), 'Expected', fmtBag(r.expected), 'Received', fmtBag(r.received), 'Unpaid', fmtBag(r.unpaid)].map(csvCell).join(','));
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `timevault-${r.m}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast('CSV downloaded');
+}
+
+/* ---------- selects ---------- */
+function fillSelect(sel, options, value) {
+  sel.innerHTML = options.map(([v, label]) => `<option value="${esc(v)}">${esc(label)}</option>`).join('');
+  const has = options.some(([v]) => v === value);
+  sel.value = has ? value : (options[0]?.[0] ?? '');
+  return sel.value;
+}
+function populateSelects() {
+  // Entry filters
+  const months = new Set([thisMonth()]);
+  state.entries.forEach((e) => months.add(monthOf(e.date)));
+  const monthOpts = [['all', 'All months'], ...[...months].sort().reverse().map((m) => [m, monthLabel(m)])];
+  view.entryMonth = fillSelect($('#f-month'), monthOpts, view.entryMonth);
+  const wpOpts = [['all', 'All workplaces'], ...state.workplaces.map((w) => [w.id, w.name + (w.active ? '' : ' (inactive)')])];
+  view.entryWp = fillSelect($('#f-wp'), wpOpts, view.entryWp);
+  const personOpts = [['all', 'Everyone'], ['me', workerName('me')], ...state.people.map((p) => [p.id, p.name + (p.active ? '' : ' (archived)')])];
+  view.entryPerson = fillSelect($('#f-person'), personOpts, view.entryPerson);
+  // Reports
+  view.reportWp = fillSelect($('#r-wp'), wpOpts, view.reportWp);
+  const rPersonOpts = [['me', workerName('me')], ['people', 'All people'], ['everyone', 'Everyone (me + people)'], ...state.people.map((p) => [p.id, p.name])];
+  view.reportPerson = fillSelect($('#r-person'), rPersonOpts, view.reportPerson);
+  // Timer
+  const active = state.workplaces.filter((w) => w.active);
+  const timerSel = $('#timer-wp');
+  const cur = state.timer?.workplaceId || timerSel.value;
+  fillSelect(timerSel, active.length ? active.map((w) => [w.id, w.name]) : [['', 'Add a workplace first']], cur);
+  timerSel.disabled = !!state.timer || !active.length;
+}
+function currencyOptions(sel, value) {
+  fillSelect(sel, CURRENCIES.map((c) => [c, c]), value);
+}
+
+/* ---------- month pickers ---------- */
+function setMonthPicker(name, month) {
+  const el = $(`[data-month-picker="${name}"] output`);
+  if (el) el.textContent = monthLabel(month);
+}
+
+/* =========================================================
+   Modals
+   ========================================================= */
+function openModal(dlg, trigger) {
+  if (dlg.open) return;
+  dlg._trigger = trigger instanceof HTMLElement ? trigger : (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  dlg.classList.remove('closing');
+  dlg.showModal();
+  const focusTarget = dlg.querySelector('[autofocus]') || dlg.querySelector('.modal-body input:not([type=hidden]):not([disabled]), .modal-body select, .modal-body textarea') || dlg.querySelector('button');
+  focusTarget?.focus({ preventScroll: true });
+}
+function closeModal(dlg, value = '') {
+  if (!dlg.open || dlg.classList.contains('closing')) return;
+  if (prefersReducedMotion) { dlg.close(value); return; }
+  dlg.classList.add('closing');
+  setTimeout(() => { dlg.classList.remove('closing'); if (dlg.open) dlg.close(value); }, 200);
+}
+$$('dialog.modal').forEach((dlg) => {
+  dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeModal(dlg, 'cancel'); });
+  dlg.addEventListener('close', () => {
+    dlg.classList.remove('closing');
+    const t = dlg._trigger;
+    dlg._trigger = null;
+    if (t && document.contains(t) && !t.closest('dialog:not([open])')) t.focus({ preventScroll: true });
+    if (typeof dlg._onClose === 'function') { const fn = dlg._onClose; dlg._onClose = null; fn(dlg.returnValue); }
+  });
+  // Click on backdrop closes
+  dlg.addEventListener('mousedown', (e) => { dlg._downOnBackdrop = e.target === dlg; });
+  dlg.addEventListener('click', (e) => { if (e.target === dlg && dlg._downOnBackdrop) closeModal(dlg, 'cancel'); });
+});
+
+function confirmAsk({ title = 'Are you sure?', message = '', ok = 'Confirm', danger = false } = {}) {
+  const dlg = $('#dlg-confirm');
+  $('#dlg-confirm-title').textContent = title;
+  $('#dlg-confirm-msg').textContent = message;
+  const okBtn = $('#dlg-confirm-ok');
+  okBtn.textContent = ok;
+  okBtn.className = `btn ${danger ? 'btn-danger' : 'btn-primary'}`;
+  return new Promise((resolve) => {
+    const trigger = document.activeElement;
+    dlg.returnValue = '';
+    dlg._onClose = (v) => resolve(v === 'ok');
+    openModal(dlg, trigger);
+  });
+}
+// The confirm dialog uses method="dialog"; animate its close too.
+$('#dlg-confirm form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  closeModal($('#dlg-confirm'), e.submitter?.value || 'cancel');
+});
+
+function setError(form, key, msg) {
+  const el = form.querySelector(`[data-error="${key}"]`);
+  if (el) { el.textContent = msg || ''; el.hidden = !msg; }
+}
+function clearErrors(form) {
+  $$('[data-error]', form).forEach((el) => { el.textContent = ''; el.hidden = true; });
+  $$('[aria-invalid]', form).forEach((el) => el.removeAttribute('aria-invalid'));
+}
+function invalid(form, name, on = true) {
+  const el = form.elements[name];
+  if (el) { if (on) el.setAttribute('aria-invalid', 'true'); else el.removeAttribute('aria-invalid'); }
+}
+
+/* ---------- Workplace modal ---------- */
+const wpForm = $('#form-workplace');
+$('#wp-swatches').innerHTML = COLORS.map((c, i) => `<label class="swatch"><input type="radio" name="color" value="${c}" ${i === 0 ? 'checked' : ''}><span style="background:${c}" title="${c}"></span><span class="visually-hidden">Colour ${i + 1}</span></label>`).join('');
+function updateWpHints() {
+  const t = wpForm.elements.payType.value;
+  $('[data-rate-label]', wpForm).textContent = { hourly: 'Rate / hour', daily: 'Rate / day', monthly: 'Monthly salary', task: 'Default / task' }[t];
+  $('[data-paytype-hint]', wpForm).textContent = {
+    hourly: 'Pay = worked hours (after breaks) × hourly rate.',
+    daily: 'Each valid work entry earns one day of pay.',
+    monthly: 'A fixed monthly amount. Time is logged for your records only.',
+    task: 'Each entry records a task and its payment. The rate above pre-fills new tasks.',
+  }[t];
+}
+wpForm.elements.payType.addEventListener('change', updateWpHints);
+function openWorkplaceModal(wp, trigger) {
+  clearErrors(wpForm);
+  wpForm.reset();
+  const f = wpForm.elements;
+  currencyOptions(f.currency, wp?.currency || state.settings.currency);
+  f.id.value = wp?.id || '';
+  f.name.value = wp?.name || '';
+  f.payType.value = wp?.payType || 'hourly';
+  f.rate.value = wp ? wp.rate : '';
+  f.notes.value = wp?.notes || '';
+  f.active.checked = wp ? wp.active : true;
+  const color = wp?.color || COLORS[state.workplaces.length % COLORS.length];
+  const radio = $$('input[name="color"]', wpForm).find((r) => r.value.toLowerCase() === color.toLowerCase());
+  if (radio) radio.checked = true; else $$('input[name="color"]', wpForm)[0].checked = true;
+  $('#dlg-wp-title').textContent = wp ? 'Edit workplace' : 'Add workplace';
+  updateWpHints();
+  openModal($('#dlg-workplace'), trigger);
+}
+wpForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  clearErrors(wpForm);
+  const f = wpForm.elements;
+  const name = f.name.value.trim();
+  const rate = num(f.rate.value, NaN);
+  let ok = true;
+  if (!name) { setError(wpForm, 'name', 'Please give the workplace a name.'); invalid(wpForm, 'name'); ok = false; }
+  if (!Number.isFinite(rate) || rate < 0) { setError(wpForm, 'rate', 'Enter a pay rate of 0 or more.'); invalid(wpForm, 'rate'); ok = false; }
+  if (!ok) { wpForm.querySelector('[aria-invalid="true"]')?.focus(); return; }
+  const existing = f.id.value ? wpById(f.id.value) : null;
+  const data = cleanWorkplace({
+    id: existing?.id || uid(), name, payType: f.payType.value, rate, currency: f.currency.value,
+    notes: f.notes.value.trim(), active: f.active.checked,
+    color: wpForm.querySelector('input[name="color"]:checked')?.value,
+    createdMonth: existing?.createdMonth || thisMonth(),
+  });
+  if (existing) Object.assign(existing, data); else state.workplaces.push(data);
+  save('workplaces');
+  closeModal($('#dlg-workplace'));
+  renderAll();
+  toast(existing ? 'Workplace updated' : 'Workplace added');
+});
+
+/* ---------- Entry modal ---------- */
+const entryForm = $('#form-entry');
+function workerOptions(current) {
+  const opts = [['me', `${workerName('me')} (myself)`]];
+  state.people.forEach((p) => { if (p.active || p.id === current) opts.push([p.id, p.name + (p.role ? ` — ${p.role}` : '')]); });
+  return opts;
+}
+function openEntryModal(entry, trigger, prefill = {}) {
+  if (!state.workplaces.length) {
+    toast('Add a workplace first, then log your time.', 'info');
+    openWorkplaceModal(null, trigger);
+    return;
+  }
+  clearErrors(entryForm);
+  entryForm.reset();
+  entryForm.dataset.dupOk = '';
+  $('#entry-warning').hidden = true;
+  $('#entry-submit').textContent = 'Save entry';
+  const f = entryForm.elements;
+  const src = entry || prefill;
+  const wpOpts = state.workplaces.filter((w) => w.active || w.id === src.workplaceId).map((w) => [w.id, w.name + (w.active ? '' : ' (inactive)')]);
+  const defaultWp = src.workplaceId || (view.entryWp !== 'all' ? view.entryWp : '') || state.timer?.workplaceId || wpOpts[0]?.[0];
+  fillSelect(f.workplaceId, wpOpts.length ? wpOpts : [['', 'No active workplaces']], defaultWp);
+  fillSelect(f.worker, workerOptions(src.worker), src.worker || 'me');
+  f.id.value = entry?.id || '';
+  f.date.value = src.date || todayStr();
+  f.start.value = src.start ?? '09:00';
+  f.end.value = src.end ?? '17:00';
+  f.breakMin.value = src.breakMin ?? 0;
+  f.note.value = src.note || '';
+  f.taskName.value = src.taskName || '';
+  f.taskAmount.value = src.taskAmount ? src.taskAmount : '';
+  $('#dlg-entry-title').textContent = entry ? 'Edit time entry' : 'Log work time';
+  syncEntryForm(true);
+  openModal($('#dlg-entry'), trigger);
+}
+function entryFromForm() {
+  const f = entryForm.elements;
+  return {
+    id: f.id.value, date: f.date.value, workplaceId: f.workplaceId.value, worker: f.worker.value || 'me',
+    start: f.start.value, end: f.end.value, breakMin: num(f.breakMin.value, 0),
+    note: f.note.value.trim(), taskName: f.taskName.value.trim(), taskAmount: num(f.taskAmount.value, 0),
+  };
+}
+function syncEntryForm(initial = false) {
+  const f = entryForm.elements;
+  const wp = wpById(f.workplaceId.value);
+  const isTask = wp?.payType === 'task';
+  $('[data-task-fields]', entryForm).hidden = !isTask;
+  if (isTask && initial && !f.taskAmount.value && !f.id.value && f.worker.value === 'me') f.taskAmount.value = wp.rate || '';
+  const e = entryFromForm();
+  const h = entryHours({ ...e, breakMin: Math.max(0, e.breakMin) });
+  const pay = entryPay({ ...e, breakMin: Math.max(0, e.breakMin) });
+  let note = '';
+  if (!wp) note = 'Choose a workplace to calculate pay.';
+  else if (e.worker !== 'me') {
+    const p = personById(e.worker);
+    note = `Paid at ${p?.name}'s ${p?.rateType} rate. New entries for other people start as Pending until approved.`;
+  } else if (wp.payType === 'monthly') note = `Fixed salary of ${money(wp.rate, wp.currency)} / month — this entry is for your records.`;
+  else if (wp.payType === 'hourly') note = `${h.toFixed(2)} h × ${money(wp.rate, wp.currency)}`;
+  else if (wp.payType === 'daily') note = `One day of pay at ${money(wp.rate, wp.currency)}.`;
+  else note = 'Task payment as entered.';
+  $('#entry-preview').innerHTML = `<div><span class="field-label">Worked</span><b>${esc(fmtHours(h, 2))}</b></div>
+    <div><span class="field-label">Pay</span><b>${pay.fixed ? 'Monthly' : esc(money(pay.amount, pay.currency))}</b></div><small>${esc(note)}</small>`;
+}
+['input', 'change'].forEach((ev) => entryForm.addEventListener(ev, (e) => {
+  if (e.target.name === 'workplaceId' || e.target.name === 'worker') {
+    const wp = wpById(entryForm.elements.workplaceId.value);
+    if (ev === 'change' && wp?.payType === 'task' && !entryForm.elements.taskAmount.value && entryForm.elements.worker.value === 'me') entryForm.elements.taskAmount.value = wp.rate || '';
+  }
+  if (entryForm.dataset.dupOk) { entryForm.dataset.dupOk = ''; $('#entry-warning').hidden = true; $('#entry-submit').textContent = 'Save entry'; }
+  syncEntryForm();
+}));
+function overlapping(e) {
+  const s = minutesOf(e.start), en = minutesOf(e.end);
+  return state.entries.filter((o) => o.id !== e.id && o.workplaceId === e.workplaceId && o.date === e.date && o.worker === e.worker && o.status !== 'rejected').filter((o) => {
+    const os = minutesOf(o.start), oe = minutesOf(o.end);
+    if (s == null || en == null || os == null || oe == null) return !e.start && !o.start; // both without times on same day
+    return s < oe && os < en;
+  });
+}
+entryForm.addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  clearErrors(entryForm);
+  const e = entryFromForm();
+  const wp = wpById(e.workplaceId);
+  let ok = true;
+  if (!DATE_RE.test(e.date)) { setError(entryForm, 'date', 'Date is required.'); invalid(entryForm, 'date'); ok = false; }
+  if (!wp) { setError(entryForm, 'workplaceId', 'Workplace is required.'); invalid(entryForm, 'workplaceId'); ok = false; }
+  const hasStart = !!e.start, hasEnd = !!e.end;
+  const timesOptional = wp?.payType === 'task';
+  if (!hasStart || !hasEnd) {
+    if (!(timesOptional && !hasStart && !hasEnd)) {
+      setError(entryForm, 'time', 'Start and end time are required.');
+      if (!hasStart) invalid(entryForm, 'start');
+      if (!hasEnd) invalid(entryForm, 'end');
+      ok = false;
+    }
+  } else if (minutesOf(e.end) <= minutesOf(e.start)) {
+    setError(entryForm, 'time', 'End time must be after start time.'); invalid(entryForm, 'end'); ok = false;
+  }
+  const rawBreak = entryForm.elements.breakMin.value.trim();
+  if (rawBreak !== '' && !Number.isFinite(Number(rawBreak))) { setError(entryForm, 'breakMin', 'Break must be a number of minutes.'); invalid(entryForm, 'breakMin'); ok = false; }
+  else if (e.breakMin < 0) { setError(entryForm, 'breakMin', 'Break duration cannot be negative.'); invalid(entryForm, 'breakMin'); ok = false; }
+  else if (hasStart && hasEnd && minutesOf(e.end) > minutesOf(e.start) && e.breakMin >= minutesOf(e.end) - minutesOf(e.start)) {
+    setError(entryForm, 'breakMin', 'Break must be shorter than the shift.'); invalid(entryForm, 'breakMin'); ok = false;
+  }
+  if (wp?.payType === 'task' && e.worker === 'me' && !(e.taskAmount > 0) && !e.taskName) {
+    setError(entryForm, 'task', 'Add a task name or a task payment.'); invalid(entryForm, 'taskName'); ok = false;
+  }
+  if (!ok) { entryForm.querySelector('[aria-invalid="true"]')?.focus(); return; }
+
+  if (!entryForm.dataset.dupOk) {
+    const dups = overlapping(e);
+    if (dups.length) {
+      const d = dups[0];
+      const w = $('#entry-warning');
+      w.textContent = `Heads up: ${workerName(e.worker)} already has an entry at ${wp.name} on ${dateLabel(e.date)}${d.start ? ` (${d.start}–${d.end})` : ''} that overlaps. Press “Save anyway” to keep both.`;
+      w.hidden = false;
+      entryForm.dataset.dupOk = '1';
+      $('#entry-submit').textContent = 'Save anyway';
+      $('#entry-submit').focus();
+      return;
+    }
+  }
+
+  const existing = e.id ? state.entries.find((x) => x.id === e.id) : null;
+  let status;
+  if (e.worker === 'me') status = 'approved';
+  else if (existing && existing.worker === e.worker) status = existing.status;
+  else status = 'pending';
+  const data = cleanEntry({ ...e, id: existing?.id || uid(), status, createdAt: existing?.createdAt || Date.now() });
+  if (existing) Object.assign(existing, data); else state.entries.push(data);
+  save('entries');
+  closeModal($('#dlg-entry'));
+  // Make sure the saved entry is visible in the list.
+  if (view.entryMonth !== 'all' && view.entryMonth !== monthOf(data.date)) view.entryMonth = monthOf(data.date);
+  renderAll();
+  toast(existing ? 'Time entry updated' : (status === 'pending' ? 'Time entry saved — pending approval' : 'Time entry saved'));
+});
+
+/* ---------- Person modal ---------- */
+const personForm = $('#form-person');
+function openPersonModal(p, trigger) {
+  clearErrors(personForm);
+  personForm.reset();
+  const f = personForm.elements;
+  currencyOptions(f.currency, p?.currency || state.settings.currency);
+  f.id.value = p?.id || '';
+  f.name.value = p?.name || '';
+  f.role.value = p?.role || '';
+  f.rateType.value = p?.rateType || 'hourly';
+  f.rate.value = p ? p.rate : '';
+  f.notes.value = p?.notes || '';
+  f.active.checked = p ? p.active : true;
+  $('#dlg-person-title').textContent = p ? 'Edit person' : 'Add person';
+  openModal($('#dlg-person'), trigger);
+}
+personForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  clearErrors(personForm);
+  const f = personForm.elements;
+  const name = f.name.value.trim();
+  const rate = f.rate.value.trim() === '' ? 0 : num(f.rate.value, NaN);
+  let ok = true;
+  if (!name) { setError(personForm, 'name', 'Name is required.'); invalid(personForm, 'name'); ok = false; }
+  if (!Number.isFinite(rate) || rate < 0) { setError(personForm, 'rate', 'Rate must be 0 or more.'); invalid(personForm, 'rate'); ok = false; }
+  if (!ok) { personForm.querySelector('[aria-invalid="true"]')?.focus(); return; }
+  const existing = f.id.value ? personById(f.id.value) : null;
+  const data = cleanPerson({ id: existing?.id || uid(), name, role: f.role.value.trim(), rateType: f.rateType.value, rate, currency: f.currency.value, notes: f.notes.value.trim(), active: f.active.checked });
+  if (existing) Object.assign(existing, data); else state.people.push(data);
+  save('people');
+  closeModal($('#dlg-person'));
+  if (!data.active) view.showArchived = view.showArchived || false;
+  renderAll();
+  toast(existing ? 'Person updated' : 'Person added');
+});
+
+/* ---------- Payment modal ---------- */
+const payForm = $('#form-payment');
+let payExpected = 0;
+function openPaymentModal(kind, refId, month, trigger) {
+  clearErrors(payForm);
+  payForm.reset();
+  const f = payForm.elements;
+  const s = kind === 'workplace' ? workplaceMonth(wpById(refId), month) : personMonth(personById(refId), month);
+  const name = kind === 'workplace' ? s.wp.name : s.p.name;
+  payExpected = s.expected;
+  f.kind.value = kind; f.refId.value = refId; f.month.value = month;
+  $('#pay-kicker').textContent = `${kind === 'workplace' ? 'Salary from' : 'Payment to'} · ${monthLabel(month)}`;
+  $('#dlg-pay-title').textContent = name;
+  fillSelect(f.status, Object.entries(kind === 'workplace' ? WP_STATUSES : PERSON_STATUSES), s.status);
+  f.received.value = s.payment ? s.payment.received : '';
+  f.received.placeholder = s.expected ? String(s.expected) : '0';
+  f.date.value = s.payment?.date || '';
+  f.note.value = s.payment?.note || '';
+  $('#pay-preview').innerHTML = `<div><span class="field-label">Expected</span><b>${esc(money(s.expected, s.currency))}</b></div>
+    <div><span class="field-label">Hours</span><b>${esc(fmtHours(s.hours, 2))}</b></div>
+    <div><span class="field-label">${kind === 'workplace' ? 'Entries' : 'Approved'}</span><b>${s.entries}</b></div>
+    <small>${kind === 'person' && s.pending ? `${s.pending} pending entr${s.pending === 1 ? 'y is' : 'ies are'} not included until approved.` : 'Amounts are in ' + esc(s.currency) + '.'}</small>`;
+  payForm.dataset.currency = s.currency;
+  openModal($('#dlg-payment'), trigger);
+}
+payForm.elements.status.addEventListener('change', () => {
+  const f = payForm.elements;
+  if (f.status.value === 'paid' && !f.received.value) f.received.value = payExpected || '';
+  if (f.status.value === 'paid' && !f.date.value) f.date.value = todayStr();
+});
+payForm.elements.received.addEventListener('input', () => {
+  const f = payForm.elements;
+  const v = num(f.received.value, NaN);
+  if (!Number.isFinite(v)) return;
+  if (payExpected > 0 && v >= payExpected - 0.004) f.status.value = 'paid';
+  else if (v > 0) f.status.value = 'partial';
+  if (v > 0 && !f.date.value) f.date.value = todayStr();
+});
+payForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  clearErrors(payForm);
+  const f = payForm.elements;
+  const raw = f.received.value.trim();
+  const received = raw === '' ? 0 : num(raw, NaN);
+  if (!Number.isFinite(received) || received < 0) { setError(payForm, 'received', 'Enter an amount of 0 or more.'); invalid(payForm, 'received'); f.received.focus(); return; }
+  let status = f.status.value;
+  if (status === 'paid' && raw === '') { /* paid with no amount -> assume expected */ }
+  const finalReceived = status === 'paid' && raw === '' ? payExpected : received;
+  if (status === 'partial' && payExpected > 0 && finalReceived >= payExpected - 0.004) status = 'paid';
+  const data = cleanPayment({ kind: f.kind.value, refId: f.refId.value, month: f.month.value, status, received: finalReceived, date: f.date.value, note: f.note.value.trim() });
+  const existing = findPayment(data.kind, data.refId, data.month);
+  if (existing) Object.assign(existing, data, { id: existing.id }); else state.payments.push(data);
+  save('payments');
+  closeModal($('#dlg-payment'));
+  renderAll();
+  toast('Payment recorded');
+});
+
+/* ---------- Settings modal ---------- */
+const settingsForm = $('#form-settings');
+function openSettings(trigger) {
+  clearErrors(settingsForm);
+  const f = settingsForm.elements;
+  f.userName.value = state.settings.userName;
+  currencyOptions(f.currency, state.settings.currency);
+  f.hoursGoal.value = state.settings.hoursGoal;
+  openModal($('#dlg-settings'), trigger);
+}
+settingsForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  clearErrors(settingsForm);
+  const f = settingsForm.elements;
+  const goal = num(f.hoursGoal.value, NaN);
+  if (!Number.isFinite(goal) || goal < 1 || goal > 744) { setError(settingsForm, 'hoursGoal', 'Goal must be between 1 and 744 hours.'); invalid(settingsForm, 'hoursGoal'); f.hoursGoal.focus(); return; }
+  state.settings = cleanSettings({ ...state.settings, userName: f.userName.value.trim(), currency: f.currency.value, hoursGoal: goal });
+  save('settings');
+  closeModal($('#dlg-settings'));
+  renderAll();
+  toast('Settings saved');
+});
+$('#goal-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const v = num($('#goal-input').value, NaN);
+  if (!Number.isFinite(v) || v < 1 || v > 744) { toast('Hours goal must be between 1 and 744.', 'error'); return; }
+  state.settings.hoursGoal = Math.round(v);
+  save('settings');
+  renderAll();
+  toast('Hours goal updated');
+});
+
+/* =========================================================
+   Timer
+   ========================================================= */
+let timerInterval = null;
+function syncTimerButtons() {
+  $$('[data-timer-btn]').forEach((b) => { b.textContent = state.timer ? 'Stop timer' : 'Start timer'; b.setAttribute('aria-pressed', String(!!state.timer)); });
+}
+function renderTimer() {
+  const pill = $('#timer-pill');
+  const on = !!state.timer;
+  pill.classList.toggle('show', on);
+  pill.setAttribute('aria-hidden', String(!on));
+  $$('button', pill).forEach((b) => (b.tabIndex = on ? 0 : -1));
+  syncTimerButtons();
+  $('#timer-wp').disabled = on || !state.workplaces.some((w) => w.active);
+  if (on) {
+    $('#timer-pill-wp').textContent = wpById(state.timer.workplaceId)?.name || '';
+    if (!timerInterval) timerInterval = setInterval(tickTimer, 1000);
+    tickTimer();
+  } else {
+    clearInterval(timerInterval); timerInterval = null;
+    $('#timer-face').textContent = '00:00:00';
+  }
+}
+function tickTimer() {
+  if (!state.timer) return;
+  const t = fmtDuration(Date.now() - state.timer.startedAt);
+  $('#timer-pill-time').textContent = t;
+  $('#timer-face').textContent = t;
+}
+function startTimer(trigger) {
+  const active = state.workplaces.filter((w) => w.active);
+  if (!active.length) { toast('Add an active workplace before starting the timer.', 'info'); openWorkplaceModal(null, trigger); return; }
+  const wpId = active.some((w) => w.id === $('#timer-wp').value) ? $('#timer-wp').value : active[0].id;
+  state.timer = { startedAt: Date.now(), workplaceId: wpId };
+  save('timer');
+  renderTimer();
+  toast(`Timer started for ${wpById(wpId).name}`, 'info');
+}
+function stopTimer(trigger) {
+  const t = state.timer;
+  if (!t) return;
+  state.timer = null;
+  save('timer');
+  renderTimer();
+  populateSelects();
+  const start = new Date(t.startedAt);
+  const now = new Date();
+  let end = now;
+  // Shifts can't cross midnight; cap at 23:59 on the start day.
+  if (dateStr(now) !== dateStr(start)) end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 23, 59);
+  let startT = timeStr(start), endT = timeStr(end);
+  if (minutesOf(endT) <= minutesOf(startT)) {
+    const sm = minutesOf(startT);
+    if (sm >= 23 * 60 + 59) startT = '23:58';
+    endT = `${pad(Math.floor((minutesOf(startT) + 1) / 60))}:${pad((minutesOf(startT) + 1) % 60)}`;
+  }
+  openEntryModal(null, trigger, { date: dateStr(start), workplaceId: t.workplaceId, start: startT, end: endT, breakMin: 0, worker: 'me' });
+  toast(`Timer stopped at ${fmtDuration(now - start)}`, 'info');
+}
+
+/* =========================================================
+   Data actions
+   ========================================================= */
+function buildDemo() {
+  const today = new Date();
+  const cm = thisMonth(), pm = shiftMonth(cm, -1);
+  const mk = (o) => ({ id: uid(), createdMonth: pm, notes: '', active: true, ...o });
+  const cafe = mk({ name: 'Blue Harbor Café', payType: 'hourly', rate: 18.5, currency: 'USD', color: '#2F69FF', notes: 'Barista shifts · paid on the 5th' });
+  const studio = mk({ name: 'Northwind Studio', payType: 'monthly', rate: 2400, currency: 'USD', color: '#0E2AC5', notes: 'Part-time design role, fixed salary' });
+  const market = mk({ name: 'Weekend Market Stall', payType: 'daily', rate: 140, currency: 'USD', color: '#F08A24', notes: 'Saturdays & some Sundays' });
+  const pixel = mk({ name: 'Pixel & Pine (freelance)', payType: 'task', rate: 250, currency: 'USD', color: '#7B5CFF', notes: 'Illustration and logo tasks' });
+  const library = mk({ name: 'City Library Desk', payType: 'hourly', rate: 15, currency: 'USD', color: '#5B6B8C', active: false, notes: 'Old job — kept for records' });
+  const aiko = { id: uid(), name: 'Aiko Tanaka', role: 'Café assistant', rateType: 'hourly', rate: 16, currency: 'USD', active: true, notes: 'Covers morning shifts' };
+  const rahim = { id: uid(), name: 'Rahim Uddin', role: 'Market helper', rateType: 'daily', rate: 90, currency: 'USD', active: true, notes: '' };
+  const sam = { id: uid(), name: 'Sam Lee', role: 'Delivery', rateType: 'task', rate: 35, currency: 'USD', active: false, notes: 'Archived — moved away' };
+  const entries = [];
+  const add = (o) => entries.push({ id: uid(), breakMin: 0, note: '', worker: 'me', taskName: '', taskAmount: 0, status: 'approved', createdAt: Date.now() + entries.length, ...o });
+  const todayD = today.getDate();
+  [pm, cm].forEach((m) => {
+    const [y, mo] = m.split('-').map(Number);
+    const last = m === cm ? todayD : daysInMonth(m);
+    for (let d = 1; d <= last; d++) {
+      const date = `${m}-${pad(d)}`;
+      const dow = new Date(y, mo - 1, d).getDay();
+      if (dow === 1 || dow === 3 || dow === 5) add({ date, workplaceId: cafe.id, start: '07:30', end: d % 2 ? '13:00' : '12:30', breakMin: 30 });
+      if (dow === 2 || dow === 4) add({ date, workplaceId: studio.id, start: '10:00', end: '17:30', breakMin: 45, note: d % 3 === 0 ? 'Client review' : '' });
+      if (dow === 6) add({ date, workplaceId: market.id, start: '08:00', end: '15:00', breakMin: 30 });
+      if (dow === 2 && d % 2 === 0) add({ date, workplaceId: cafe.id, worker: aiko.id, start: '07:00', end: '11:00', status: m === pm ? 'approved' : (d > todayD - 7 ? 'pending' : 'approved') });
+      if (dow === 6 && d > 7) add({ date, workplaceId: market.id, worker: rahim.id, start: '08:00', end: '15:00', breakMin: 30, status: m === pm ? 'approved' : (d > todayD - 6 ? 'pending' : 'approved') });
+    }
+    add({ date: `${m}-${pad(Math.min(4, last))}`, workplaceId: pixel.id, start: '19:00', end: '22:30', taskName: 'Menu illustration set', taskAmount: 320 });
+    if (last >= 12) add({ date: `${m}-12`, workplaceId: pixel.id, start: '', end: '', taskName: 'Logo refresh', taskAmount: 450 });
+  });
+  // One rejected entry for flavour
+  add({ date: `${pm}-03`, workplaceId: cafe.id, worker: aiko.id, start: '13:00', end: '18:00', status: 'rejected', note: 'Duplicate of another shift' });
+  add({ date: `${pm}-06`, workplaceId: pixel.id, worker: sam.id, start: '', end: '', taskName: 'Print delivery', taskAmount: 35, status: 'approved' });
+  return { workplaces: [cafe, studio, market, pixel, library], people: [aiko, rahim, sam], entries, cm, pm, ids: { cafe, studio, market, pixel, aiko, rahim, sam } };
+}
+function loadDemo() {
+  const demo = buildDemo();
+  state.workplaces = demo.workplaces.map(cleanWorkplace);
+  state.people = demo.people.map(cleanPerson);
+  state.entries = demo.entries.map(cleanEntry).filter(Boolean);
+  state.payments = [];
+  const { cafe, studio, market, pixel, aiko, rahim, sam } = demo.ids;
+  const pm = demo.pm, cm = demo.cm;
+  const exp = (wp, m) => workplaceMonth(wpById(wp.id), m).expected;
+  const pexp = (p, m) => personMonth(personById(p.id), m).expected;
+  const pay = (kind, ref, m, status, received, note = '') => state.payments.push(cleanPayment({ kind, refId: ref.id, month: m, status, received: round2(received), date: status === 'calculated' || status === 'awaiting' ? '' : `${cm}-0${Math.min(5, new Date().getDate())}`, note }));
+  pay('workplace', cafe, pm, 'paid', exp(cafe, pm), 'Bank transfer');
+  pay('workplace', studio, pm, 'paid', exp(studio, pm), 'Payroll');
+  pay('workplace', market, pm, 'partial', exp(market, pm) - 140, 'One Saturday still owed');
+  pay('workplace', pixel, pm, 'paid', exp(pixel, pm), 'Invoice settled');
+  pay('workplace', studio, cm, 'awaiting', 0);
+  pay('person', aiko, pm, 'paid', pexp(aiko, pm), 'Cash');
+  pay('person', rahim, pm, 'partial', Math.max(0, pexp(rahim, pm) - 90), 'Rest next week');
+  pay('person', sam, pm, 'paid', pexp(sam, pm));
+  state.settings = cleanSettings({ ...state.settings, hoursGoal: state.settings.hoursGoal || 160 });
+  state.timer = null;
+  save();
+  view.entryMonth = thisMonth(); view.entryWp = 'all'; view.entryPerson = 'all';
+  view.salaryMonth = view.peopleMonth = view.reportMonth = thisMonth();
+  view.reportWp = 'all'; view.reportPerson = 'me';
+  entryLimit = ENTRY_PAGE;
+  renderAll();
+}
+function clearData() {
+  state.workplaces = []; state.entries = []; state.people = []; state.payments = []; state.timer = null;
+  save();
+  // Keep settings (goal, name, currency) but mark that the user chose an empty vault.
+  writeKey(KEYS.settings, state.settings);
+  entryLimit = ENTRY_PAGE;
+  renderAll();
+}
+
+/* =========================================================
+   Events
+   ========================================================= */
+document.addEventListener('click', async (ev) => {
+  const el = ev.target.closest('[data-action]');
+  if (!el || el.matches('input[type="checkbox"]')) return;
+  const { action, id, month } = el.dataset;
+  switch (action) {
+    case 'add-entry': closeNav(); openEntryModal(null, el); break;
+    case 'edit-entry': openEntryModal(state.entries.find((e) => e.id === id), el); break;
+    case 'delete-entry': {
+      const e = state.entries.find((x) => x.id === id);
+      if (!e) break;
+      if (await confirmAsk({ title: 'Delete this time entry?', message: `${dateLabel(e.date)} at ${wpById(e.workplaceId)?.name || 'unknown workplace'} (${entryHours(e).toFixed(2)} h, ${workerName(e.worker)}). This can't be undone.`, ok: 'Delete entry', danger: true })) {
+        state.entries = state.entries.filter((x) => x.id !== id);
+        save('entries'); renderAll(); toast('Time entry deleted');
+      }
+      break;
+    }
+    case 'approve-entry': case 'reject-entry': {
+      const e = state.entries.find((x) => x.id === id);
+      if (!e || e.worker === 'me') break;
+      e.status = action === 'approve-entry' ? 'approved' : 'rejected';
+      save('entries'); renderAll();
+      toast(e.status === 'approved' ? `Approved ${workerName(e.worker)}'s entry` : `Rejected ${workerName(e.worker)}'s entry`, e.status === 'approved' ? 'ok' : 'info');
+      break;
+    }
+    case 'more-entries': entryLimit += ENTRY_PAGE; renderEntries(); break;
+    case 'add-workplace': openWorkplaceModal(null, el); break;
+    case 'edit-workplace': openWorkplaceModal(wpById(id), el); break;
+    case 'delete-workplace': {
+      const wp = wpById(id);
+      if (!wp) break;
+      const n = state.entries.filter((e) => e.workplaceId === id).length;
+      if (await confirmAsk({ title: `Delete ${wp.name}?`, message: n ? `This also deletes ${n} time entr${n === 1 ? 'y' : 'ies'} and any recorded payments for this workplace. Tip: mark it inactive instead to keep its history.` : 'This workplace has no time entries. This can\'t be undone.', ok: 'Delete workplace', danger: true })) {
+        state.workplaces = state.workplaces.filter((w) => w.id !== id);
+        state.entries = state.entries.filter((e) => e.workplaceId !== id);
+        state.payments = state.payments.filter((p) => !(p.kind === 'workplace' && p.refId === id));
+        if (state.timer?.workplaceId === id) { state.timer = null; }
+        if (view.entryWp === id) view.entryWp = 'all';
+        if (view.reportWp === id) view.reportWp = 'all';
+        save(); renderAll(); toast('Workplace deleted');
+      }
+      break;
+    }
+    case 'add-person': openPersonModal(null, el); break;
+    case 'edit-person': openPersonModal(personById(id), el); break;
+    case 'archive-person': {
+      const p = personById(id);
+      if (!p) break;
+      p.active = !p.active;
+      save('people'); renderAll();
+      toast(p.active ? `${p.name} restored` : `${p.name} archived`, 'info');
+      break;
+    }
+    case 'delete-person': {
+      const p = personById(id);
+      if (!p) break;
+      const n = state.entries.filter((e) => e.worker === id).length;
+      if (await confirmAsk({ title: `Delete ${p.name}?`, message: n ? `This also deletes ${n} time entr${n === 1 ? 'y' : 'ies'} and payments recorded for ${p.name}. Archive instead to keep history.` : 'This can\'t be undone.', ok: 'Delete person', danger: true })) {
+        state.people = state.people.filter((x) => x.id !== id);
+        state.entries = state.entries.filter((e) => e.worker !== id);
+        state.payments = state.payments.filter((x) => !(x.kind === 'person' && x.refId === id));
+        if (view.entryPerson === id) view.entryPerson = 'all';
+        if (view.reportPerson === id) view.reportPerson = 'me';
+        save(); renderAll(); toast('Person deleted');
+      }
+      break;
+    }
+    case 'pay-workplace': if (wpById(id)) openPaymentModal('workplace', id, month, el); break;
+    case 'pay-person': if (personById(id)) openPaymentModal('person', id, month, el); break;
+    case 'toggle-timer': if (state.timer) stopTimer(el); else startTimer(el); break;
+    case 'discard-timer':
+      if (await confirmAsk({ title: 'Discard the running timer?', message: 'The elapsed time will not be saved.', ok: 'Discard', danger: true })) {
+        state.timer = null; save('timer'); renderTimer(); populateSelects(); toast('Timer discarded', 'info');
+      }
+      break;
+    case 'open-settings': closeNav(); openSettings(el); break;
+    case 'load-demo': {
+      const has = state.workplaces.length || state.entries.length || state.people.length;
+      if (!has || await confirmAsk({ title: 'Load demo data?', message: 'This replaces all your current workplaces, entries, people and payments with sample data.', ok: 'Load demo', danger: true })) {
+        closeModal($('#dlg-settings'));
+        loadDemo(); toast('Demo data loaded');
+      }
+      break;
+    }
+    case 'clear-data': {
+      if (await confirmAsk({ title: 'Clear all data?', message: 'Every workplace, time entry, person and payment will be permanently removed from this browser.', ok: 'Clear everything', danger: true })) {
+        closeModal($('#dlg-settings'));
+        clearData(); toast('All data cleared', 'info');
+      }
+      break;
+    }
+    case 'download-csv': downloadCsv(); break;
+    case 'print': renderReports(); window.print(); break;
+    case 'close-modal': { const d = el.closest('dialog'); if (d) closeModal(d, 'cancel'); break; }
+    case 'nav-toggle': toggleNav(); break;
+  }
+});
+
+document.addEventListener('change', (ev) => {
+  const t = ev.target;
+  if (t.matches('[data-action="toggle-workplace"]')) {
+    const wp = wpById(t.dataset.id);
+    if (!wp) return;
+    wp.active = t.checked;
+    save('workplaces');
+    // Re-render after the switch animation so the user sees it move.
+    setTimeout(() => { renderAll(); }, 260);
+    toast(`${wp.name} is now ${wp.active ? 'active' : 'inactive'}`, 'info');
+  }
+});
+
+$$('[data-wp-filter]').forEach((b) => b.addEventListener('click', () => { view.wpFilter = b.dataset.wpFilter; renderWorkplaces(); }));
+$('#f-month').addEventListener('change', (e) => { view.entryMonth = e.target.value; entryLimit = ENTRY_PAGE; renderEntries(); });
+$('#f-wp').addEventListener('change', (e) => { view.entryWp = e.target.value; entryLimit = ENTRY_PAGE; renderEntries(); });
+$('#f-person').addEventListener('change', (e) => { view.entryPerson = e.target.value; entryLimit = ENTRY_PAGE; renderEntries(); });
+$('#r-wp').addEventListener('change', (e) => { view.reportWp = e.target.value; renderReports(); });
+$('#r-person').addEventListener('change', (e) => { view.reportPerson = e.target.value; renderReports(); });
+$('#show-archived').addEventListener('change', (e) => { view.showArchived = e.target.checked; renderPeople(); });
+$$('[data-month-picker]').forEach((mp) => {
+  mp.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-month-step]');
+    if (!b) return;
+    const key = { salary: 'salaryMonth', people: 'peopleMonth', reports: 'reportMonth' }[mp.dataset.monthPicker];
+    view[key] = shiftMonth(view[key], Number(b.dataset.monthStep));
+    if (key === 'salaryMonth') renderSalary();
+    else if (key === 'peopleMonth') renderPeople();
+    else renderReports();
+  });
+});
+
+/* ---------- mobile nav ---------- */
+const nav = $('#main-nav'), navBtn = $('[data-action="nav-toggle"]');
+function toggleNav(force) {
+  const open = force ?? !nav.classList.contains('open');
+  nav.classList.toggle('open', open);
+  navBtn.setAttribute('aria-expanded', String(open));
+  navBtn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+}
+const closeNav = () => toggleNav(false);
+nav.addEventListener('click', (e) => { if (e.target.closest('a')) closeNav(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && nav.classList.contains('open')) { closeNav(); navBtn.focus(); } });
+document.addEventListener('pointerdown', (e) => { if (nav.classList.contains('open') && !e.target.closest('.header-bar')) closeNav(); });
+
+/* ---------- 3D tilt on workplace cards (fine pointers only) ---------- */
+if (matchMedia('(hover: hover) and (pointer: fine)').matches && !prefersReducedMotion) {
+  const grid = $('#wp-grid');
+  let raf = 0, pending = null;
+  grid.addEventListener('pointermove', (e) => {
+    const card = e.target.closest('[data-tilt]');
+    if (!card) return;
+    pending = { card, x: e.clientX, y: e.clientY };
+    if (!raf) raf = requestAnimationFrame(() => {
+      raf = 0;
+      const { card: c, x, y } = pending;
+      const r = c.getBoundingClientRect();
+      const px = (x - r.left) / r.width - 0.5, py = (y - r.top) / r.height - 0.5;
+      c.classList.add('tilting');
+      c.style.transform = `perspective(900px) rotateX(${(-py * 7).toFixed(2)}deg) rotateY(${(px * 9).toFixed(2)}deg) translateY(-4px)`;
+    });
+  });
+  grid.addEventListener('pointerout', (e) => {
+    const card = e.target.closest('[data-tilt]');
+    if (card && !card.contains(e.relatedTarget)) { card.classList.remove('tilting'); card.style.transform = ''; }
+  });
+}
+
+/* ---------- scroll: reveal, scene, background, active nav ---------- */
+const io = 'IntersectionObserver' in window ? new IntersectionObserver((items) => {
+  items.forEach((it) => { if (it.isIntersecting) { it.target.classList.add('in'); io.unobserve(it.target); } });
+}, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 }) : null;
+function observeReveals() { $$('.reveal:not(.in)').forEach((el) => (io ? io.observe(el) : el.classList.add('in'))); }
+
+const sceneEls = $$('[data-scene]');
+let lastScene = -1, lastBg = '', lastNav = '';
+function updateScene() {
+  const mid = innerHeight * 0.5;
+  let current = sceneEls[0];
+  for (const el of sceneEls) { if (el.getBoundingClientRect().top <= mid) current = el; }
+  const atBottom = innerHeight + scrollY >= document.documentElement.scrollHeight - 4;
+  if (atBottom) current = sceneEls[sceneEls.length - 1];
+  const scene = Number(current.dataset.scene), bg = current.dataset.bg;
+  if (scene !== lastScene) {
+    lastScene = scene;
+    window.__tvScene = scene;
+    window.dispatchEvent(new CustomEvent('timevault:scene', { detail: { scene } }));
+  }
+  if (bg !== lastBg) {
+    lastBg = bg;
+    $$('.bg-layer').forEach((l) => l.classList.toggle('on', l.dataset.bg === bg));
+    document.querySelector('meta[name="theme-color"]').content = { blue: '#ecefff', lime: '#fbffe5', pink: '#fff0f1' }[bg];
+  }
+  const navId = current.id === 'footer' ? 'reports' : current.id;
+  if (navId !== lastNav) {
+    lastNav = navId;
+    $$('.main-nav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === navId));
+  }
+}
+let scrollRaf = 0;
+const onScroll = () => { if (!scrollRaf) scrollRaf = requestAnimationFrame(() => { scrollRaf = 0; updateScene(); }); };
+addEventListener('scroll', onScroll, { passive: true });
+addEventListener('resize', onScroll, { passive: true });
+
+/* ---------- cross-tab sync ---------- */
+addEventListener('storage', (e) => {
+  if (e.key && !Object.values(KEYS).includes(e.key)) return;
+  if ($$('dialog[open]').length) return; // don't disturb an open form
+  loadState(); renderAll();
+});
+
+/* ---------- day rollover (keeps "this month" correct after midnight) ---------- */
+let knownMonth = thisMonth();
+setInterval(() => {
+  if (thisMonth() !== knownMonth) {
+    const old = knownMonth; knownMonth = thisMonth();
+    ['salaryMonth', 'peopleMonth', 'reportMonth'].forEach((k) => { if (view[k] === old) view[k] = knownMonth; });
+    if (view.entryMonth === old) view.entryMonth = knownMonth;
+    renderAll();
+  }
+}, 60000);
+
+/* =========================================================
+   Boot + loader
+   ========================================================= */
+$('#year').textContent = new Date().getFullYear();
+const firstVisit = !hasAnyStoredData();
+loadState();
+if (firstVisit) loadDemo();
+renderAll();
+updateScene();
+try { localStorage.setItem('timevault__probe', '1'); localStorage.removeItem('timevault__probe'); $('#storage-meta').textContent = 'Saved in localStorage'; }
+catch { $('#storage-meta').textContent = 'Storage unavailable — changes won\'t persist'; }
+
+(function runLoader() {
+  const pctEl = $('#loader-pct'), bar = $('#loader-bar'), loader = $('#loader');
+  const minDur = prefersReducedMotion ? 300 : 1500;
+  const t0 = performance.now();
+  let fontsReady = false;
+  (document.fonts?.ready || Promise.resolve()).then(() => { fontsReady = true; });
+  setTimeout(() => { fontsReady = true; }, 2500); // never wait forever for fonts
+  function frame(now) {
+    const elapsed = now - t0;
+    let p = clamp(elapsed / minDur, 0, 1);
+    if (!fontsReady) p = Math.min(p, 0.92);
+    const shown = Math.round(easeOut(p) * 100);
+    pctEl.textContent = `${String(shown).padStart(3, '0')}%`;
+    bar.style.width = `${shown}%`;
+    if (p < 1) { requestAnimationFrame(frame); return; }
+    setTimeout(() => {
+      loader.classList.add('done');
+      document.body.classList.remove('is-loading');
+      document.body.classList.add('ready');
+      window.__tvLoaded = true;
+      window.dispatchEvent(new CustomEvent('timevault:loaded'));
+      observeReveals();
+      renderHero(); // count-up from zero now that the hero is visible
+      setTimeout(() => loader.remove(), 1000);
+      if (firstVisit) setTimeout(() => toast('Welcome! Demo data is loaded — use “Clear all data” to start fresh.', 'info'), 900);
+    }, 180);
+  }
+  requestAnimationFrame(frame);
+})();
+
+// Re-zero hero counters before the loader finishes so they count up on reveal.
+['#stat-hours', '#stat-expected', '#stat-paid', '#stat-unpaid'].forEach((s) => { const el = $(s); el.dataset.v = '0'; });
+</script>
+
+<!-- =========================================================
+     Three.js background (isolated — app works without it)
+     ========================================================= -->
+<script type="module">
+const canvas = document.getElementById('vault-canvas');
+function fallback() {
+  document.documentElement.classList.add('no-webgl');
+  canvas.classList.remove('live');
+}
+function hasWebGL() {
+  try {
+    const c = document.createElement('canvas');
+    return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl')));
+  } catch { return false; }
+}
+
+let THREE = null, RoomEnvironment = null;
+if (!hasWebGL()) fallback();
+else {
+  try {
+    THREE = await import('three');
+    ({ RoomEnvironment } = await import('three/addons/environments/RoomEnvironment.js'));
+  } catch (err) {
+    console.warn('[TimeVault] 3D background unavailable:', err);
+    fallback();
+    THREE = null;
+  }
+}
+if (THREE) {
+  try { init(); } catch (err) { console.warn('[TimeVault] 3D init failed:', err); fallback(); }
+}
+
+function init() {
+  const isMobile = matchMedia('(max-width: 760px), (pointer: coarse)').matches;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const COUNT = isMobile ? 54 : 96;
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, alpha: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 1.75));
+  renderer.setSize(innerWidth, innerHeight, false);
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.08;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); stop(); fallback(); }, false);
+
+  // Software rasterisers (no GPU) can't keep up with the full scene; start them on the light preset.
+  let softwareGL = false;
+  try {
+    const gl = renderer.getContext();
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    softwareGL = /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name);
+  } catch { /* ignore */ }
+
+  const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envScene = new RoomEnvironment();
+  scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+  envScene.traverse?.((o) => { o.geometry?.dispose?.(); o.material?.dispose?.(); });
+  pmrem.dispose();
+
+  const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 200);
+  camera.position.set(0, 0, 30);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xc2d1ff, 0.7));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.7);
+  sun.position.set(6, 22, 14);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(isMobile ? 512 : 1024, isMobile ? 512 : 1024);
+  Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 70 });
+  sun.shadow.bias = -0.0006;
+  sun.shadow.radius = 4;
+  scene.add(sun);
+  const fill = new THREE.DirectionalLight(0xdfe6ff, 0.6);
+  fill.position.set(-10, -4, 10);
+  scene.add(fill);
+
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.ShadowMaterial({ opacity: 0.1 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // Coin profile (lathe): raised rim + recessed face. Ordered bottom→top for outward normals.
+  const prof = [
+    [0, -0.075], [0.74, -0.075], [0.8, -0.1], [0.9, -0.125], [0.97, -0.115], [1.0, -0.085],
+    [1.0, 0.085], [0.97, 0.115], [0.9, 0.125], [0.8, 0.1], [0.74, 0.075], [0, 0.075],
+  ].map(([x, y]) => new THREE.Vector2(x, y));
+  const geo = new THREE.LatheGeometry(prof, isMobile ? 32 : 48);
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: 0xffffff, metalness: 0.32, roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.06,
+    iridescence: isMobile ? 0 : 0.35, iridescenceIOR: 1.4, sheen: 0.4, sheenColor: new THREE.Color(0xdfe6ff),
+    transparent: true, opacity: 1, envMapIntensity: 1.1,
+  });
+  const mesh = new THREE.InstancedMesh(geo, mat, COUNT);
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  mesh.castShadow = true;
+  mesh.frustumCulled = false;
+  scene.add(mesh);
+
+  // Quality: 2 = full, 1 = light (no shadows / iridescence, DPR 1). Below that we fall back to the gradient.
+  let quality = 2;
+  function setQuality(q) {
+    quality = q;
+    if (q < 2) {
+      renderer.shadowMap.enabled = false;
+      mesh.castShadow = false;
+      floor.visible = false;
+      sun.castShadow = false;
+      Object.assign(mat, { iridescence: 0, sheen: 0, clearcoat: 0.5 });
+      mat.needsUpdate = true;
+      renderer.setPixelRatio(1);
+      renderer.setSize(innerWidth, innerHeight, false);
+    }
+  }
+  if (softwareGL) setQuality(1);
+
+  const PALETTE = ['#c9d6ff', '#ffd6e0', '#e6ffb3', '#fff1c1', '#d4f1ff', '#e6dcff', '#ffe1c9', '#b8c9ff', '#ffc2cc', '#f4ffd0'];
+  const ACCENTS = ['#2F69FF', '#0E2AC5'];
+  const col = new THREE.Color();
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  let halfH = 1, halfW = 1;
+  function layout() {
+    halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z;
+    halfW = halfH * camera.aspect;
+    floor.position.y = -halfH * 0.86;
+  }
+  layout();
+
+  const coins = [];
+  for (let i = 0; i < COUNT; i++) {
+    const a = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random());
+    const c = {
+      p: new THREE.Vector3(), v: new THREE.Vector3(),
+      r: new THREE.Euler(rand(0, Math.PI), rand(0, Math.PI), rand(0, Math.PI)),
+      w: new THREE.Vector3(rand(-0.6, 0.6), rand(-0.8, 0.8), rand(-0.5, 0.5)),
+      s: Math.pow(Math.random(), 1.6) * 0.75 + 0.35,
+      hu: Math.cos(a) * rr, hv: Math.sin(a) * rr, hz: rand(-9, 4),
+      phase: Math.random() * Math.PI * 2, speed: rand(0.6, 1.3),
+      delay: i * (isMobile ? 0.018 : 0.012) + Math.random() * 0.25,
+      grow: 0, gone: false, rush: rand(0.6, 1.4),
+    };
+    c.p.set(c.hu * 6, c.hv * 5, c.hz - 30 - Math.random() * 15);
+    coins.push(c);
+    col.set(Math.random() < 0.1 ? ACCENTS[i % 2] : PALETTE[i % PALETTE.length]);
+    mesh.setColorAt(i, col);
+  }
+  mesh.instanceColor.needsUpdate = true;
+
+  // Targets for the "coin stack" scene: a ring with a vertical stroke, like a currency glyph.
+  function stackTarget(i, out) {
+    const ringN = Math.round(COUNT * 0.66);
+    const R = Math.min(halfH * 0.62, halfW * 0.72);
+    if (i < ringN) {
+      const a = (i / ringN) * Math.PI * 2 + Math.PI / 2;
+      return out.set(Math.cos(a) * R, Math.sin(a) * R, (i % 3) * 0.35);
+    }
+    const k = i - ringN, n = COUNT - ringN;
+    const t = n > 1 ? k / (n - 1) : 0.5;
+    return out.set((k % 2 ? 0.35 : -0.35) * R * 0.1, (t - 0.5) * R * 2.5, 1 + (k % 2) * 0.3);
+  }
+  const home = (c, out) => out.set(c.hu * halfW * 0.86, c.hv * halfH * 0.78, c.hz);
+
+  let mode = window.__tvScene ?? 0;
+  let modeTime = 0;
+  window.addEventListener('timevault:scene', (e) => {
+    const next = e.detail.scene;
+    if (next === mode) return;
+    const prev = mode;
+    mode = next; modeTime = 0;
+    if (prev === 3) {
+      // Coins that flew past the camera come back from deep space.
+      coins.forEach((c) => { if (c.gone || c.p.z > 12) { c.gone = false; c.p.set(c.hu * halfW, c.hv * halfH, -60 - Math.random() * 20); c.v.set(0, 0, 0); } });
+    }
+    if (mode === 1) coins.forEach((c) => { c.v.y += rand(-1, 2); c.w.multiplyScalar(1.5); });
+    if (mode === 3) coins.forEach((c) => { c.v.y += rand(1, 3); });
+  });
+
+  // Pointer / touch repulsion with momentum
+  const ptr = { x: -9999, y: -9999, vx: 0, vy: 0, active: false, t: 0 };
+  function movePtr(x, y) {
+    const now = performance.now();
+    const dt = Math.max(8, now - (ptr.t || now - 16));
+    if (ptr.active) {
+      ptr.vx = ptr.vx * 0.5 + ((x - ptr.x) / dt) * 0.5;
+      ptr.vy = ptr.vy * 0.5 + ((y - ptr.y) / dt) * 0.5;
+    }
+    ptr.x = x; ptr.y = y; ptr.t = now; ptr.active = true;
+  }
+  addEventListener('pointermove', (e) => { if (e.pointerType !== 'touch') movePtr(e.clientX, e.clientY); }, { passive: true });
+  addEventListener('touchstart', (e) => { const t = e.touches[0]; if (t) { ptr.active = false; movePtr(t.clientX, t.clientY); } }, { passive: true });
+  addEventListener('touchmove', (e) => { const t = e.touches[0]; if (t) movePtr(t.clientX, t.clientY); }, { passive: true });
+  const release = () => { ptr.active = false; };
+  addEventListener('touchend', release, { passive: true });
+  addEventListener('touchcancel', release, { passive: true });
+  document.addEventListener('mouseleave', release);
+  addEventListener('blur', release);
+
+  const dummy = new THREE.Object3D();
+  const tmp = new THREE.Vector3(), tgt = new THREE.Vector3();
+  const TAU = Math.PI * 2;
+  const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+  const nearestFlat = (a) => Math.round(a / Math.PI) * Math.PI;
+
+  const perf = { windowStart: 0, frames: 0, checks: 0 };
+  let started = !!window.__tvLoaded, startTime = 0, last = 0, raf = 0, running = false, time = 0;
+  let opacity = 1;
+  function begin() {
+    if (started && startTime) return;
+    started = true; startTime = performance.now();
+    canvas.classList.add('live');
+    start();
+  }
+  if (started) begin(); else addEventListener('timevault:loaded', begin, { once: true });
+
+  function start() { if (running || document.hidden || !started) return; running = true; last = performance.now(); perf.windowStart = 0; raf = requestAnimationFrame(loop); }
+  function stop() { running = false; cancelAnimationFrame(raf); }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); else start(); });
+
+  let resizeRaf = 0;
+  addEventListener('resize', () => {
+    if (resizeRaf) return;
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = 0;
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight, false);
+      layout();
+    });
+  }, { passive: true });
+
+  // Watch real frame rate for the first seconds; step down, then give up rather than freeze the UI.
+  function perfGuard(now, frameMs) {
+    if (perf.checks >= 4) return true;
+    if (!perf.windowStart) { perf.windowStart = now; perf.frames = 0; return true; }
+    perf.frames++;
+    const span = now - perf.windowStart;
+    const verySlow = frameMs > 250 && perf.frames > 2;
+    if (span < 1500 && !verySlow) return true;
+    const fps = (perf.frames / span) * 1000;
+    perf.checks++;
+    perf.windowStart = now; perf.frames = 0;
+    if (fps >= 24 && !verySlow) return true;
+    if (quality > 1) { setQuality(1); return true; }
+    stop();
+    fallback();
+    console.info('[TimeVault] 3D background disabled: device too slow (' + fps.toFixed(1) + ' fps).');
+    return false;
+  }
+
+  const R_PX = isMobile ? 120 : 170;
+  function loop(now) {
+    if (!running) return;
+    raf = requestAnimationFrame(loop);
+    const frameMs = now - last;
+    let dt = Math.min(0.033, frameMs / 1000);
+    last = now;
+    if (!perfGuard(now, frameMs)) return;
+    if (reduced) dt *= 0.4;
+    time += dt; modeTime += dt;
+    const since = (now - startTime) / 1000;
+    const W = innerWidth, H = innerHeight;
+    const floorY = floor.position.y;
+    const ptrSpeed = Math.min(4, Math.hypot(ptr.vx, ptr.vy)); // px per ms
+    ptr.vx *= 0.9; ptr.vy *= 0.9;
+
+    for (let i = 0; i < COUNT; i++) {
+      const c = coins[i];
+      if (since < c.delay) { dummy.position.set(0, 0, -500); dummy.scale.setScalar(0.0001); dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix); continue; }
+      c.grow = Math.min(1, c.grow + dt * 1.4);
+
+      if (mode === 0) {
+        home(c, tgt);
+        tgt.x += Math.sin(time * 0.5 * c.speed + c.phase) * 0.6;
+        tgt.y += Math.cos(time * 0.6 * c.speed + c.phase) * 0.7;
+        tgt.z += Math.sin(time * 0.3 * c.speed + c.phase) * 0.8;
+        c.v.addScaledVector(tmp.subVectors(tgt, c.p), 1.5 * dt);
+        c.v.multiplyScalar(1 - Math.min(0.9, 1.9 * dt));
+        c.r.x += c.w.x * dt * 0.6; c.r.y += c.w.y * dt * 0.6; c.r.z += c.w.z * dt * 0.6;
+      } else if (mode === 1) {
+        c.v.y -= 24 * dt;
+        c.v.x *= 1 - 0.4 * dt;
+        c.v.z += (c.hz * 0.5 - c.p.z) * 0.9 * dt;
+        c.v.z *= 1 - 1.2 * dt;
+        const bottom = floorY + 0.13 * c.s;
+        const onFloor = c.p.y <= bottom + 0.02;
+        if (c.p.y < bottom) {
+          c.p.y = bottom;
+          if (c.v.y < 0) {
+            c.v.y = -c.v.y * 0.42;
+            if (c.v.y < 1.1) c.v.y = 0;
+            c.w.multiplyScalar(0.6);
+          }
+          c.v.x *= 0.9;
+        }
+        if (onFloor) {
+          c.r.x += angDiff(c.r.x, nearestFlat(c.r.x)) * Math.min(1, 6 * dt);
+          c.r.z += angDiff(c.r.z, nearestFlat(c.r.z)) * Math.min(1, 6 * dt);
+          c.r.y += c.w.y * dt * 0.3;
+          c.w.multiplyScalar(1 - Math.min(1, 3 * dt));
+        } else {
+          c.r.x += c.w.x * dt * 2; c.r.y += c.w.y * dt; c.r.z += c.w.z * dt * 2;
+        }
+        const wall = halfW * 0.96;
+        if (c.p.x > wall) { c.p.x = wall; c.v.x = -Math.abs(c.v.x) * 0.5; }
+        if (c.p.x < -wall) { c.p.x = -wall; c.v.x = Math.abs(c.v.x) * 0.5; }
+      } else if (mode === 2) {
+        stackTarget(i, tgt);
+        tgt.y += Math.sin(time * 0.8 + i * 0.15) * 0.12;
+        c.v.addScaledVector(tmp.subVectors(tgt, c.p), 3.4 * dt);
+        c.v.multiplyScalar(1 - Math.min(0.9, 2.8 * dt));
+        const k = Math.min(1, 3.5 * dt);
+        c.r.x += angDiff(c.r.x, Math.PI / 2) * k;
+        c.r.y += angDiff(c.r.y, Math.sin(time * 0.6 + i * 0.2) * 0.25) * k;
+        c.r.z += angDiff(c.r.z, 0) * k;
+      } else {
+        const ramp = Math.min(1, modeTime * 0.9);
+        c.v.z += 26 * c.rush * ramp * dt;
+        c.v.y += 2.2 * dt;
+        c.v.x += c.p.x * 0.35 * dt;
+        c.v.multiplyScalar(1 - 0.2 * dt);
+        c.r.x += c.w.x * dt * 3; c.r.y += c.w.y * dt * 3;
+        if (c.p.z > camera.position.z + 2) c.gone = true;
+      }
+
+      // Repulsion (screen space) with momentum from fast swipes.
+      if (ptr.active && mode !== 3) {
+        tmp.copy(c.p).project(camera);
+        const sx = (tmp.x + 1) * 0.5 * W, sy = (1 - tmp.y) * 0.5 * H;
+        const dx = sx - ptr.x, dy = sy - ptr.y;
+        const d = Math.hypot(dx, dy);
+        const R = R_PX * (1 + ptrSpeed * 0.25);
+        if (d < R && d > 0.001) {
+          const f = 1 - d / R;
+          const push = (10 + ptrSpeed * 38) * f * f;
+          c.v.x += (dx / d) * push * dt * 6 + ptr.vx * f * 9 * dt * 6;
+          c.v.y += (-dy / d) * push * dt * 6 - ptr.vy * f * 9 * dt * 6;
+          c.v.z += f * push * 0.15 * dt;
+          c.w.x += (dy / d) * f * ptrSpeed * 0.8;
+          c.w.z += (dx / d) * f * ptrSpeed * 0.8;
+        }
+      }
+      c.w.clampScalar(-6, 6);
+      c.v.clampLength(0, 60);
+      c.p.addScaledVector(c.v, dt);
+
+      const g = 1 - Math.pow(1 - c.grow, 3);
+      const sMul = mode === 2 ? 0.78 : 1;
+      dummy.position.copy(c.p);
+      dummy.rotation.copy(c.r);
+      dummy.scale.setScalar(c.gone ? 0.0001 : Math.max(0.0001, c.s * g * sMul));
+      // Entrance: fly in from depth.
+      if (c.grow < 1 && mode !== 3) c.p.z += (c.hz - c.p.z) * Math.min(1, dt * 2.2) * (1 - g);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+
+    const targetOpacity = mode === 3 ? Math.max(0, 1 - modeTime * 0.6) : 1;
+    opacity += (targetOpacity - opacity) * Math.min(1, dt * 3);
+    mat.opacity = opacity;
+    mesh.visible = opacity > 0.01;
+    floor.material.opacity = 0.1 * opacity;
+    renderer.render(scene, camera);
+  }
+}
+</script>
+</body>
+</html>
