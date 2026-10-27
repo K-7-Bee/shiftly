@@ -1873,30 +1873,55 @@ function setMonthPicker(name, month) {
    Modals
    ========================================================= */
 function openModal(dlg, trigger) {
+  flushClose(dlg);
   if (dlg.open) return;
   dlg._trigger = trigger instanceof HTMLElement ? trigger : (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-  dlg.classList.remove('closing');
   dlg.showModal();
+  dlg._openedAt = performance.now();
   const focusTarget = dlg.querySelector('[autofocus]') || dlg.querySelector('.modal-body input:not([type=hidden]):not([disabled]), .modal-body select, .modal-body textarea') || dlg.querySelector('button');
   focusTarget?.focus({ preventScroll: true });
 }
+/* Focus restore and the close callback run synchronously here. The native 'close' event is
+   queued as a later task, so by the time it fires the dialog may already have been reopened
+   (e.g. a second confirm) — handling the result there would resolve the wrong confirm. */
+function afterClose(dlg, value) {
+  const t = dlg._trigger;
+  dlg._trigger = null;
+  if (t && document.contains(t) && !t.closest('dialog:not([open])')) t.focus({ preventScroll: true });
+  if (typeof dlg._onClose === 'function') { const fn = dlg._onClose; dlg._onClose = null; fn(value); }
+}
+function finishClose(dlg, value) {
+  clearTimeout(dlg._closeTimer);
+  dlg.classList.remove('closing');
+  if (!dlg.open) return;
+  dlg._pendingCloseEvents = (dlg._pendingCloseEvents || 0) + 1;
+  dlg.close(value);
+  afterClose(dlg, value);
+}
+// Complete a close animation that is still running, so the dialog can be reopened right away.
+function flushClose(dlg) {
+  if (dlg.classList.contains('closing')) finishClose(dlg, dlg._closingValue);
+}
 function closeModal(dlg, value = '') {
   if (!dlg.open || dlg.classList.contains('closing')) return;
-  if (prefersReducedMotion) { dlg.close(value); return; }
+  if (prefersReducedMotion) { finishClose(dlg, value); return; }
+  dlg._closingValue = value;
   dlg.classList.add('closing');
-  setTimeout(() => { dlg.classList.remove('closing'); if (dlg.open) dlg.close(value); }, 200);
+  dlg._closeTimer = setTimeout(() => finishClose(dlg, value), 200);
 }
 $$('dialog.modal').forEach((dlg) => {
   dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeModal(dlg, 'cancel'); });
   dlg.addEventListener('close', () => {
+    // Closes made through finishClose() were already handled.
+    if (dlg._pendingCloseEvents > 0) { dlg._pendingCloseEvents--; return; }
+    // Closed natively (e.g. the browser forcing a close on repeated Escape).
+    clearTimeout(dlg._closeTimer);
     dlg.classList.remove('closing');
-    const t = dlg._trigger;
-    dlg._trigger = null;
-    if (t && document.contains(t) && !t.closest('dialog:not([open])')) t.focus({ preventScroll: true });
-    if (typeof dlg._onClose === 'function') { const fn = dlg._onClose; dlg._onClose = null; fn(dlg.returnValue); }
+    afterClose(dlg, dlg.returnValue);
   });
-  // Click on backdrop closes
-  dlg.addEventListener('mousedown', (e) => { dlg._downOnBackdrop = e.target === dlg; });
+  // Click on backdrop closes — but not while the dialog is still sliding in, where a click
+  // aimed at a button can land just outside it and silently cancel.
+  dlg.addEventListener('mousedown', (e) => { dlg._downOnBackdrop = e.target === dlg && performance.now() - (dlg._openedAt || 0) > 500; });
   dlg.addEventListener('click', (e) => { if (e.target === dlg && dlg._downOnBackdrop) closeModal(dlg, 'cancel'); });
 });
 
@@ -1908,6 +1933,7 @@ function confirmAsk({ title = 'Are you sure?', message = '', ok = 'Confirm', dan
   okBtn.textContent = ok;
   okBtn.className = `btn ${danger ? 'btn-danger' : 'btn-primary'}`;
   return new Promise((resolve) => {
+    flushClose(dlg);
     const trigger = document.activeElement;
     dlg.returnValue = '';
     dlg._onClose = (v) => resolve(v === 'ok');
