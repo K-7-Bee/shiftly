@@ -1,0 +1,289 @@
+Create a complete, production-quality personal work-time and salary management website as a SINGLE self-contained `index.html` file.
+
+Use only HTML, CSS, and vanilla JavaScript in one file. No build step, no framework, no bundler, no backend. Use Google Fonts via <link> and Three.js r0.160+ through an ES-module CDN import map. The site must work well on both mobile and laptop browsers, remain fully responsive, and use touch-friendly controls.
+
+## Product concept
+
+Build a premium, fun, interactive personal accounting dashboard called **TimeVault**.
+
+It is for one main user who:
+- Works at different workplaces.
+- Records their own monthly work time and salary.
+- Sometimes manages other people who work for them.
+- Wants to track hours, pay rates, calculated monthly salary, payment status, and simple reports.
+
+Do NOT include overtime rules, tax calculation, payroll tax, insurance, pension, invoicing, GPS tracking, screenshots, activity monitoring, or complex accounting features.
+
+## Visual direction
+
+The design must feel premium, playful, modern, and highly interactive — not like a boring admin dashboard.
+
+Use a clean light “white-slate studio” aesthetic with glassmorphism:
+- Base background: soft white/blue radial gradients.
+- Primary accent: royal blue `#0E2AC5`.
+- Secondary accent: bright blue `#2F69FF`.
+- Text: near-black `#1a1a1a`.
+- Cards: rounded corners, white translucent backgrounds, backdrop blur, subtle borders, soft shadows, and small hover lift animations.
+- Typography: Raleway for headings, Inter for body text, JetBrains Mono for labels, numbers, and small metadata.
+- Use generous spacing, large display headings, uppercase mono section labels, and smooth entrance animations.
+
+The site must have a fixed full-screen interactive 3D background made with Three.js:
+- Render glossy, pastel, hyper-real 3D coins/currency discs floating behind the interface.
+- Use approximately 96 objects on desktop and 54 on mobile.
+- Coins should have varied sizes, subtle rotation, physical/glass-like materials, soft shadows, and gentle floating motion.
+- The cursor or finger should repel nearby coins with momentum: a quick swipe/flick should push them away more strongly.
+- On mobile, support touchmove interaction without interfering with scrolling or form controls.
+- As the user scrolls through major sections, the 3D field should change behavior:
+  1. Hero: coins float calmly in a loose elliptical cluster.
+  2. Time tracking section: coins gently fall and bounce on an invisible floor.
+  3. Salary section: coins reassemble into a large circular “coin stack” or currency symbol-like silhouette.
+  4. Reports/footer: coins lift off and rush toward the camera, fading away.
+- The background gradient should smoothly morph between:
+  - Hero: `radial-gradient(circle at center, #ffffff 0%, #ecefff 35%, #c2d1ff 100%)`
+  - Time section: `radial-gradient(circle at center, #ffffff 0%, #fbffe5 38%, #e8ff9c 100%)`
+  - Salary/reports section: `radial-gradient(circle at center, #ffffff 0%, #fff0f1 38%, #ffd1d5 100%)`
+- The WebGL canvas must sit behind the content, use `pointer-events: none`, and never block buttons, inputs, dropdowns, or scrolling.
+
+Include a short premium loading screen:
+- Show “Calibrating time vault” while loading.
+- Display a thin animated progress bar and a percentage counter from 000% to 100%.
+- Fade out smoothly, then animate the header and hero into view.
+- Start the 3D coin entrance exactly as the loader disappears.
+
+## App structure
+
+Build the site as a one-page application with these major areas:
+
+1. Fixed header
+2. Hero / dashboard overview
+3. Workplaces
+4. Time entries
+5. Monthly salary
+6. People I manage
+7. Reports and exports
+8. Footer
+
+Use smooth scrolling and scroll-triggered reveal animations for each section. Elements should fade in, rise slightly, and remove blur over about 1.5 seconds using `cubic-bezier(0.16, 1, 0.3, 1)`.
+
+## Header
+
+Create a fixed glassmorphic header with:
+- Left: bold wordmark `TIMEVAULT`.
+- Right: a “Add time” pill button and a round settings icon button.
+- On mobile, collapse navigation into a simple hamburger menu or bottom action bar.
+- The “Add time” button should open the time-entry modal.
+
+## Hero / dashboard overview
+
+Create a full-height hero section with:
+- Small mono label: `[ Personal work & salary vault ]`
+- Large headline: `Every hour. Every payment. One place.`
+- Short paragraph: `Track workplace hours, calculate monthly salary, and keep a clear record of what you and your team have earned.`
+- A live summary row of four glass stat cards:
+  - `This month hours`
+  - `This month expected pay`
+  - `Paid this month`
+  - `Unpaid balance`
+- These values must update automatically from the data stored in localStorage.
+- Include a large “Log work time” button.
+- Include a subtle animated “Scroll” cue with a downward arrow.
+
+## Workplaces
+
+Create a “Workplaces” section where the user can add and manage workplaces.
+
+For each workplace, store:
+- Workplace name
+- Pay type: hourly, daily, monthly, or per-task
+- Pay rate
+- Currency
+- Optional notes
+- Active/inactive status
+
+Allow the user to:
+- Add a workplace through a modal.
+- Edit or delete a workplace.
+- See each workplace as an interactive card.
+- Show total hours and calculated pay for the current month on each card.
+- Filter workplace cards by active/inactive status.
+
+Use playful card interactions:
+- Hover lift.
+- Subtle 3D tilt following the cursor on desktop.
+- Animated count-up numbers when values change.
+- A colored dot or small icon representing each workplace.
+
+## Time entries
+
+Create a “Time entries” section.
+
+Allow the user to add a work entry with:
+- Date
+- Workplace
+- Start time
+- End time
+- Break duration in minutes
+- Optional note
+- Optional worker name: “Me” by default, or a person from the managed-people list
+
+Automatically calculate:
+- Break-adjusted worked hours
+- Pay for that entry based on the workplace pay type and rate
+
+For monthly salary workplaces:
+- Do not calculate pay from individual hours.
+- Instead, show the fixed monthly salary as the expected monthly amount.
+- Still allow time logging for record-keeping.
+
+For hourly workplaces:
+- Calculate: `(worked hours) × (hourly rate)`.
+
+For daily workplaces:
+- Calculate one day of pay for each valid work entry.
+
+For per-task workplaces:
+- Let the user enter a task name and task payment amount.
+
+Include:
+- A list or table of recent time entries.
+- Filters by month, workplace, and person.
+- Edit and delete buttons for each entry.
+- A “Start timer” feature:
+  - One button starts a live timer.
+  - Another stops it and opens a pre-filled time-entry form.
+  - Show elapsed time in a floating pill while the timer is active.
+  - Persist the active timer in localStorage so it survives a page refresh.
+- Validation:
+  - End time must be after start time.
+  - Break duration cannot be negative.
+  - Date and workplace are required.
+- Duplicate detection:
+  - Warn if the same workplace already has an entry for the same date with overlapping times.
+
+## Monthly salary
+
+Create a “Monthly salary” section.
+
+For each month and workplace, calculate:
+- Total worked hours
+- Number of work days/entries
+- Expected pay
+- Amount actually received
+- Difference between expected and received pay
+
+Allow the user to:
+- Select a month and year.
+- See a monthly summary by workplace.
+- Mark a workplace/month as:
+  - `Calculated`
+  - `Awaiting payment`
+  - `Paid`
+  - `Partially paid`
+- Enter the actual received amount and payment date.
+- See unpaid balance clearly.
+- Add a short payment note.
+
+Use animated progress bars or circular progress rings to show:
+- Percentage of expected salary received.
+- Total monthly hours compared with a user-defined monthly hours goal.
+
+Do not calculate overtime or taxes.
+
+## People I manage
+
+Create a “People” section for workers who sometimes work for the user.
+
+For each person, store:
+- Name
+- Optional role or job title
+- Default hourly/daily/task rate
+- Currency
+- Active status
+- Notes
+
+Allow the user to:
+- Add, edit, archive, and delete people.
+- Assign time entries to a person.
+- View each person’s monthly hours and expected pay.
+- Mark a person’s monthly payment as paid, partially paid, or awaiting payment.
+- See a simple list of unpaid balances.
+
+Include an approval-style workflow:
+- A time entry added for another person starts as `Pending`.
+- The main user can approve or reject it.
+- Only approved entries count toward that person’s monthly expected pay.
+- Show status badges: `Pending`, `Approved`, `Rejected`.
+
+## Reports and exports
+
+Create a “Reports” section with:
+- Month selector.
+- Workplace selector: All workplaces or one workplace.
+- Person selector: Me, all people, or one person.
+- Summary cards for:
+  - Total hours
+  - Total expected pay
+  - Total received pay
+  - Unpaid balance
+- A simple bar chart showing daily worked hours for the selected month.
+- A second chart showing pay by workplace.
+- Build charts with vanilla JavaScript, SVG, or CSS; do not require Chart.js.
+- Include a “Download CSV” button that exports the filtered time entries and salary summary.
+- Include a “Print / Save PDF” button that opens the browser print dialog with a clean print stylesheet.
+
+## Data storage
+
+Use `localStorage` as the only database.
+
+Store data under clear keys such as:
+- `timevault_workplaces`
+- `timevault_time_entries`
+- `timevault_people`
+- `timevault_payments`
+- `timevault_settings`
+- `timevault_active_timer`
+
+Requirements:
+- Automatically save after every add, edit, delete, approval, or payment update.
+- Load saved data when the page opens.
+- Include sample/demo data on first visit, with a clearly visible “Load demo data” and “Clear all data” option.
+- Confirm before deleting a workplace, person, or time entry.
+- Handle invalid or missing localStorage data safely.
+- Currency should be selectable per workplace/person and displayed correctly in the interface.
+
+## Interactions and polish
+
+Make the app feel alive:
+- Smooth modal open/close animations.
+- Buttons with hover, active, and focus states.
+- Toast notifications for actions such as “Time entry saved”, “Payment recorded”, and “CSV downloaded”.
+- Animated number counters for totals.
+- Skeleton/loading shimmer only during initial load if needed.
+- Empty states with friendly illustrations made from CSS or inline SVG, such as “No time entries yet — start your first timer.”
+- Keyboard accessibility:
+  - All forms usable with Tab, Enter, and Escape.
+  - Escape closes modals.
+  - Focus moves into a modal when opened and returns to the trigger when closed.
+- Fully responsive layout:
+  - Mobile-first design.
+  - Tables become stacked cards on small screens.
+  - Modals scroll properly on small screens.
+  - No horizontal overflow.
+  - Touch targets at least 44px.
+
+## Technical requirements
+
+- One file only: `index.html`.
+- No backend, no API keys, no external database.
+- Use semantic HTML: `header`, `main`, `section`, `form`, `table`, `button`, `dialog`, and accessible labels.
+- Use CSS custom properties for colors, spacing, radii, and fonts.
+- Use modern CSS: flexbox, grid, `clamp()`, `backdrop-filter`, transitions, and media queries.
+- Use vanilla JavaScript modules where helpful.
+- Use Three.js only for the background; the app logic must remain independent of it.
+- Ensure the page still works if WebGL fails or is unavailable: hide the canvas gracefully and show the normal gradient background.
+- Optimize performance:
+  - Pause or reduce the 3D animation when the tab is hidden.
+  - Use `requestAnimationFrame`.
+  - Avoid layout thrashing.
+  - Keep mobile object count lower.
+- The final result must look like a polished commercial product, not a generic dashboard template.
