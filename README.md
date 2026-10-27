@@ -15,11 +15,11 @@ Every change is saved in the browser first, so the app works offline. If cloud s
 
 ## Setting up cloud sync (Supabase, free tier)
 
-1. Create a project at [supabase.com](https://supabase.com).
+1. Create a project at [supabase.com](https://supabase.com), or reuse an existing one. TimeVault only adds its own `timevault_state` table.
 2. Open **SQL Editor → New query**, paste the contents of [supabase/schema.sql](supabase/schema.sql), and click **Run**.
 3. Go to **Authentication → URL Configuration**:
-   - Set **Site URL** to `https://k-7-bee.github.io/shiftly/`.
-   - Add the same URL under **Redirect URLs**.
+   - Add `https://k-7-bee.github.io/shiftly/` under **Redirect URLs**.
+   - New project only: also set **Site URL** to that address. In a shared project, leave **Site URL** unchanged, because it applies to every site using the project. Note that accounts are shared too: anyone who can sign in to the other site can sign in here, but each account only ever sees its own vault.
 4. Go to **Project Settings → API** and copy the **Project URL** and the **anon public** key.
 5. Paste them into `SUPABASE_URL` and `SUPABASE_ANON_KEY` near the top of the *Cloud sync* section in `index.html`, then commit.
 
